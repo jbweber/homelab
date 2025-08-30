@@ -1,0 +1,48 @@
+---
+- name: Install packages
+  ansible.builtin.dnf:
+    name:
+      - genisoimage
+      - libvirt-client
+      - libvirt-daemon-driver-qemu
+      - libvirt-daemon-kvm
+      - python3-pyroute2
+      - python3-json-logger
+      - qemu-kvm
+    state: present
+
+- name: Create hook directory
+  ansible.builtin.file:
+    path: /etc/libvirt/hooks
+    state: directory
+    mode: '0755'
+
+- name: Place QEMU hook
+  ansible.builtin.copy:
+    src: qemu-hook
+    dest: /etc/libvirt/hooks/qemu
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart libvirtd.service
+
+- name: Place libvirt_hook_qemu logrotate
+  ansible.builtin.copy:
+    src: libvirt_hook_qemu.logrotate
+    dest: /etc/logrotate.d/libvirt_hook_qemu
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable and start libvirtd
+  ansible.builtin.systemd:
+    name: libvirtd
+    state: started
+    enabled: true
+
+- name: Undefine libvirt network 'default'
+  become: true
+  community.libvirt.virt_net:
+    name: default
+    state: absent
+  failed_when: false

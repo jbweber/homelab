@@ -1,2 +1,16 @@
 # Host variables for gravity.fe.cofront.xyz
 gravity_var: "This is a variable for gravity.fe.cofront.xyz"
+network_connections:
+  - name: virt
+    type: bridge
+    interface_name: virt
+    ip:
+      address:
+      - 10.37.37.2/24
+    state: up
+    autoconnect: yes
+  - name: enp2s0
+    type: ethernet
+    interface_name: enp2s0    
+    controller: virt
+    port_type: bridge

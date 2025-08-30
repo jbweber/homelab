@@ -1,0 +1,5 @@
+---
+collections:
+  - name: community.libvirt
+roles:
+  - name: linux-system-roles.network

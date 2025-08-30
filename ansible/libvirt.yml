@@ -7,3 +7,5 @@
   tasks:
     - name: Ping all libvirt hosts
       ansible.builtin.ping:
+  roles:
+    - libvirt

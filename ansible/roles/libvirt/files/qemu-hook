@@ -1,0 +1,115 @@
+#!/usr/bin/python3
+
+import logging
+import string
+import sys
+import uuid
+
+from lxml import etree
+from pyroute2 import IPRoute
+from pythonjsonlogger import jsonlogger
+
+
+IF_PREFIXES = ['vmmd-']
+PROXY_ARP = '/proc/sys/net/ipv4/conf/{}/proxy_arp'
+PROXY_DELAY = '/proc/sys/net/ipv4/neigh/{}/proxy_delay'
+
+
+logger = logging.getLogger('libvirt_hooks.qemu')
+logger.setLevel(logging.DEBUG)
+
+fh = logging.FileHandler(filename='/var/log/libvirt_hook_qemu.log')
+fh.setLevel(logging.DEBUG)
+fh.setFormatter(jsonlogger.JsonFormatter())
+
+logger.addHandler(fh)
+
+execution_id = uuid.uuid4()
+
+def configure_interfaces(interfaces):
+    ip = IPRoute()
+    try:
+        for interface in interfaces:
+            ipif = ip.link_lookup(ifname=interface)
+            ip_address = ifname_to_ip(interface)
+            logger.debug('configure_interfaces', extra={'ip_address':ip_address, 'ipif':ipif})
+            ip.route('replace', dst='{}/32'.format(ip_address), oif=ipif[0] , scope='link')
+            write_proc_value(PROXY_ARP.format(interface), 1)
+            write_proc_value(PROXY_DELAY.format(interface), 0)
+    finally:
+        ip.close()
+
+
+def determine_interfaces(domain):
+    interfaces = []
+    domain_ifs = domain.findall('devices/interface')
+    for domain_if in domain_ifs:
+        if_target = domain_if.find('target')
+        if if_target is not None:
+            if_name = if_target.attrib.get('dev', '')
+            for if_prefix in IF_PREFIXES:
+                if if_name.startswith(if_prefix):
+                    interfaces.append(if_name)
+    return interfaces
+
+
+def get_name(domain):
+    ename = domain.find('name')
+    if ename is None:
+        return 'unknown_machine'
+
+    return ename.text
+
+
+def ifname_to_ip(ifname):
+    addr_str = ifname.split('-')[-1]
+
+    print(addr_str)
+
+    if not all(c in string.hexdigits for c in addr_str) or len(addr_str) != 8:
+        return None
+
+    first = int(addr_str[:2], 16)
+    second = int(addr_str[2:4], 16)
+    third = int(addr_str[4:6], 16)
+    fourth = int(addr_str[6:8], 16)
+
+    return '{}.{}.{}.{}'.format(first, second, third, fourth)
+
+
+def write_proc_value(path, value):
+    with open(path, 'w') as f:
+        print(value, file=f)
+
+
+def main():
+    target, op, sub_op = sys.argv[1:4]
+
+    logger.info('executing qemu hook', extra={'execution_id': execution_id, 'target': target, 'op': op, 'sub_op': sub_op})
+
+    # only run when op = prepare and sub_op = begin
+    if op != 'started' or sub_op != 'begin':
+        logger.debug('skipping non-matching op or sub_op', extra={'execution_id': execution_id})
+        return
+
+    logger.debug('executing matched op and sub_op', extra={'execution_id': execution_id})
+
+    # read domain configuration
+    domain = etree.fromstring(sys.stdin.read())
+
+    # get name
+    name = get_name(domain)
+
+    # get interface list
+    interfaces = determine_interfaces(domain)
+
+    logger.info('configuring interfaces', extra={'execution_id': execution_id, 'machine_name': name, 'interfaces': interfaces})
+
+    configure_interfaces(interfaces)
+
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception:
+        logger.exception("error")
