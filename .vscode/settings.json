@@ -1,0 +1,8 @@
+{
+  // Set the default remote workspace folder (update to your remote path)
+  "remote.SSH.defaultWorkspace": "/home/jweber/projects/homelab",
+  // Recommended: Use LF line endings for Linux compatibility
+  "files.eol": "\n",
+  // Recommended: Set Ansible linting if you use an extension
+  "ansible.linting.enabled": true
+}
