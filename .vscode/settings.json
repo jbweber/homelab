@@ -4,5 +4,6 @@
   // Recommended: Use LF line endings for Linux compatibility
   "files.eol": "\n",
   // Recommended: Set Ansible linting if you use an extension
-  "ansible.linting.enabled": true
+  "ansible.linting.enabled": true,
+  "ansible.python.interpreterPath": "/usr/bin/python"
 }

@@ -1,0 +1,2 @@
+# Group variables for k8s
+k8s_var: "This is a variable for the k8s group"

@@ -1,0 +1,9 @@
+---
+- name: Libvirt group playbook
+  hosts: libvirt
+  become: true
+  vars_files:
+    - ~/.homelab.vault
+  tasks:
+    - name: Ping all libvirt hosts
+      ansible.builtin.ping:

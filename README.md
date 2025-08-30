@@ -25,3 +25,21 @@ Extensions are listed in `.vscode/extensions.json`. VS Code will prompt you to i
 ```bash
 $ sudo dnf install ansible-core ansible-collection-ansible-posix
 ```
+
+## Secrets and Vault Usage
+
+You must create an Ansible vault file at `~/.homelab.vault` (outside this repository).
+
+This vault file should contain at least the following variables:
+
+- `ansible_user`: The username to SSH as for remote connections.
+- `ansible_become_password`: The sudo password for privilege escalation.
+
+Example vault file contents:
+
+```yaml
+ansible_user: your_ssh_username
+ansible_become_password: your_sudo_password
+```
+
+This file is referenced in all playbooks via `vars_files: [ ~/.homelab.vault ]` and must exist for automation to work.

@@ -1,0 +1,9 @@
+---
+- name: Core group playbook
+  hosts: core
+  become: true
+  vars_files:
+    - ~/.homelab.vault
+  tasks:
+    - name: Ping all core hosts
+      ansible.builtin.ping:

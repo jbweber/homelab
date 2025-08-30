@@ -1,0 +1,2 @@
+# Group variables for libvirt
+libvirt_var: "This is a variable for the libvirt group"

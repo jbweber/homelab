@@ -1,0 +1,9 @@
+---
+- name: K8s group playbook
+  hosts: k8s
+  become: true
+  vars_files:
+    - ~/.homelab.vault
+  tasks:
+    - name: Ping all k8s hosts
+      ansible.builtin.ping:
