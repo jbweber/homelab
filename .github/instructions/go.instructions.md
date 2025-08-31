@@ -17,6 +17,7 @@ Follow idiomatic Go practices and community standards when writing Go code. Thes
 - Make the zero value useful
 - Document exported types, functions, methods, and packages
 - Use Go modules for dependency management
+- Never put any code above the package statement in a Go code file
 
 ## Naming Conventions
 

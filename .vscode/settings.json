@@ -5,5 +5,9 @@
   "files.eol": "\n",
   // Recommended: Set Ansible linting if you use an extension
   "ansible.linting.enabled": true,
-  "ansible.python.interpreterPath": "/usr/bin/python"
+  "ansible.python.interpreterPath": "/usr/bin/python",
+  // Go formatting settings
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "golang.go",
+  "go.formatTool": "goimports"
 }
