@@ -10,6 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/jbweber/homelab/nook/internal/datastore"
 	"github.com/jbweber/homelab/nook/internal/testutil"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func setupTestAPI(t *testing.T) *chi.Mux {
@@ -35,18 +37,12 @@ func TestListMachines_Empty(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusOK, w.Code)
 
 	var response []MachineResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Errorf("Failed to decode response: %v", err)
-	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
 
-	if len(response) != 0 {
-		t.Errorf("Expected empty list, got %d machines", len(response))
-	}
+	assert.Len(t, response, 0)
 }
 
 func TestCreateMachine(t *testing.T) {
@@ -64,24 +60,14 @@ func TestCreateMachine(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Expected status 201, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusCreated, w.Code)
 
 	var response MachineResponse
-	if err := json.NewDecoder(w.Body).Decode(&response); err != nil {
-		t.Errorf("Failed to decode response: %v", err)
-	}
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
 
-	if response.Name != reqBody.Name {
-		t.Errorf("Expected name %s, got %s", reqBody.Name, response.Name)
-	}
-	if response.IPv4 != reqBody.IPv4 {
-		t.Errorf("Expected IPv4 %s, got %s", reqBody.IPv4, response.IPv4)
-	}
-	if response.ID == 0 {
-		t.Error("Expected non-zero ID")
-	}
+	assert.Equal(t, reqBody.Name, response.Name)
+	assert.Equal(t, reqBody.IPv4, response.IPv4)
+	assert.NotZero(t, response.ID)
 }
 
 func TestCreateMachine_InvalidJSON(t *testing.T) {
@@ -93,9 +79,7 @@ func TestCreateMachine_InvalidJSON(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestCreateMachine_MissingFields(t *testing.T) {
@@ -110,9 +94,7 @@ func TestCreateMachine_MissingFields(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestGetMachine_NotFound(t *testing.T) {
@@ -123,9 +105,7 @@ func TestGetMachine_NotFound(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusNotFound {
-		t.Errorf("Expected status 404, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestGetMachine_InvalidID(t *testing.T) {
@@ -136,7 +116,5 @@ func TestGetMachine_InvalidID(t *testing.T) {
 
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Expected status 400, got %d", w.Code)
-	}
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
