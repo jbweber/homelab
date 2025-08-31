@@ -33,6 +33,7 @@ func TestListMachines_Empty(t *testing.T) {
 	r := setupTestAPI(t)
 
 	req := httptest.NewRequest("GET", "/api/v0/machines", nil)
+	req.RemoteAddr = "192.168.1.100:12345"
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -49,13 +50,15 @@ func TestCreateMachine(t *testing.T) {
 	r := setupTestAPI(t)
 
 	reqBody := CreateMachineRequest{
-		Name: "test-machine",
-		IPv4: "192.168.1.100",
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.168.1.100",
 	}
 	body, _ := json.Marshal(reqBody)
 
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.100:12345"
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -66,6 +69,7 @@ func TestCreateMachine(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&response))
 
 	assert.Equal(t, reqBody.Name, response.Name)
+	assert.Equal(t, reqBody.Hostname, response.Hostname)
 	assert.Equal(t, reqBody.IPv4, response.IPv4)
 	assert.NotZero(t, response.ID)
 }
@@ -75,6 +79,7 @@ func TestCreateMachine_InvalidJSON(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.100:12345"
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)
@@ -85,11 +90,12 @@ func TestCreateMachine_InvalidJSON(t *testing.T) {
 func TestCreateMachine_MissingFields(t *testing.T) {
 	r := setupTestAPI(t)
 
-	reqBody := CreateMachineRequest{Name: "test"} // Missing IPv4
+	reqBody := CreateMachineRequest{Name: "test"} // Missing Hostname and IPv4
 	body, _ := json.Marshal(reqBody)
 
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.100:12345"
 	w := httptest.NewRecorder()
 
 	r.ServeHTTP(w, req)

@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strconv"
 
@@ -22,89 +23,109 @@ func NewAPI(ds *datastore.Datastore) *API {
 
 // RegisterRoutes registers all API endpoints to the given chi router.
 func (a *API) RegisterRoutes(r chi.Router) {
-	r.Get("/2021-01-03/dynamic/instance-identity/document", a.instanceIdentityHandler)
-	r.Get("/2021-01-03/meta-data/public-keys", publicKeysHandler)
-	r.Get("/2021-01-03/meta-data/public-keys/{idx}", publicKeyIndexHandler)
-	r.Get("/2021-01-03/meta-data/public-keys/{idx}/openssh-key", publicKeyOpenSSHHandler)
-	r.Get("/latest/api/token", apiTokenHandler)
-	r.Get("/meta-data", metaDataHandler)
-	r.Get("/user-data", userDataHandler)
-	r.Get("/vendor-data", vendorDataHandler)
+	r.Get("/meta-data", a.noCloudMetaDataHandler)
+	r.Get("/user-data", a.noCloudUserDataHandler)
+	r.Get("/vendor-data", a.noCloudVendorDataHandler)
+	r.Get("/network-config", a.noCloudNetworkConfigHandler)
 
-	// Machine management endpoints
 	r.Get("/api/v0/machines", a.listMachinesHandler)
 	r.Post("/api/v0/machines", a.createMachineHandler)
 	r.Get("/api/v0/machines/{id}", a.getMachineHandler)
 	r.Delete("/api/v0/machines/{id}", a.deleteMachineHandler)
 	r.Get("/api/v0/machines/name/{name}", a.getMachineByNameHandler)
 	r.Get("/api/v0/machines/ipv4/{ipv4}", a.getMachineByIPv4Handler)
-
 	r.Get("/api/v0/networks", networksHandler)
 	r.Get("/api/v0/ssh-keys", sshKeysHandler)
 }
 
-func (a *API) instanceIdentityHandler(w http.ResponseWriter, r *http.Request) {
+// noCloudUserDataHandler serves NoCloud-compatible user-data
+func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
+	// For now, serve a static cloud-init user-data script
+	userData := `#cloud-config
+hostname: default-host
+manage_etc_hosts: true
+`
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[instance-identity document placeholder]"))
+	w.Write([]byte(userData))
 }
 
-func publicKeysHandler(w http.ResponseWriter, r *http.Request) {
+// noCloudVendorDataHandler serves NoCloud-compatible vendor-data
+func (a *API) noCloudVendorDataHandler(w http.ResponseWriter, r *http.Request) {
+	// For now, serve empty vendor-data
+	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[public-keys placeholder]"))
+	w.Write([]byte(""))
 }
 
-func publicKeyIndexHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
+// noCloudNetworkConfigHandler serves NoCloud-compatible network-config
+func (a *API) noCloudNetworkConfigHandler(w http.ResponseWriter, r *http.Request) {
+	// For now, serve a basic network config
+	networkConfig := `version: 2
+ethernets:
+  eth0:
+	dhcp4: true
+`
+	w.Header().Set("Content-Type", "text/yaml")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(networkConfig))
+}
+
+// noCloudMetaDataHandler serves NoCloud-compatible metadata based on requestor IP
+func (a *API) noCloudMetaDataHandler(w http.ResponseWriter, r *http.Request) {
+	// Extract requestor IP (remote address)
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		http.Error(w, "Invalid key index", http.StatusBadRequest)
+		http.Error(w, "unable to parse remote address", http.StatusBadRequest)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "[public-keys/%d placeholder]", idx)
-}
 
-func publicKeyOpenSSHHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
+	// Lookup machine by IPv4
+	machine, err := a.ds.GetMachineByIPv4(ip)
 	if err != nil {
-		http.Error(w, "Invalid key index", http.StatusBadRequest)
+		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "[public-keys/%d/openssh-key placeholder]", idx)
-}
+	if machine == nil {
+		http.Error(w, "machine not found for IP", http.StatusNotFound)
+		return
+	}
 
-func apiTokenHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[api token placeholder]"))
-}
+	// Format instance-id as iid-XXXXXXXX (8-digit zero-padded ID)
+	instanceID := fmt.Sprintf("iid-%08d", machine.ID)
 
-func metaDataHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[meta-data placeholder]"))
-}
+	// Compose NoCloud metadata (YAML)
+	meta := fmt.Sprintf(
+		"instance-id: %s\n"+
+			"hostname: %s\n"+
+			"local-hostname: %s\n"+
+			"local-ipv4: %s\n"+
+			"public-hostname: %s\n"+
+			"security-groups: default\n",
+		instanceID,
+		machine.Hostname,
+		machine.Hostname,
+		machine.IPv4,
+		machine.Hostname,
+	)
 
-func userDataHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/yaml")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[user-data placeholder]"))
-}
-
-func vendorDataHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[vendor-data placeholder]"))
+	w.Write([]byte(meta))
 }
 
 // Machine request/response types
 type CreateMachineRequest struct {
-	Name string `json:"name"`
-	IPv4 string `json:"ipv4"`
+	Name     string `json:"name"`
+	Hostname string `json:"hostname"`
+	IPv4     string `json:"ipv4"`
 }
 
 type MachineResponse struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
-	IPv4 string `json:"ipv4"`
+	ID       int64  `json:"id"`
+	Name     string `json:"name"`
+	Hostname string `json:"hostname"`
+	IPv4     string `json:"ipv4"`
 }
 
 type ErrorResponse struct {
@@ -122,9 +143,10 @@ func (a *API) listMachinesHandler(w http.ResponseWriter, r *http.Request) {
 	response := make([]MachineResponse, len(machines))
 	for i, machine := range machines {
 		response[i] = MachineResponse{
-			ID:   machine.ID,
-			Name: machine.Name,
-			IPv4: machine.IPv4,
+			ID:       machine.ID,
+			Name:     machine.Name,
+			Hostname: machine.Hostname,
+			IPv4:     machine.IPv4,
 		}
 	}
 
@@ -142,16 +164,17 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == "" || req.IPv4 == "" {
+	if req.Name == "" || req.Hostname == "" || req.IPv4 == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Name and IPv4 are required"})
+		json.NewEncoder(w).Encode(ErrorResponse{Error: "Name, Hostname, and IPv4 are required"})
 		return
 	}
 
 	machine := datastore.Machine{
-		Name: req.Name,
-		IPv4: req.IPv4,
+		Name:     req.Name,
+		Hostname: req.Hostname,
+		IPv4:     req.IPv4,
 	}
 
 	created, err := a.ds.CreateMachine(machine)
@@ -163,9 +186,10 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MachineResponse{
-		ID:   created.ID,
-		Name: created.Name,
-		IPv4: created.IPv4,
+		ID:       created.ID,
+		Name:     created.Name,
+		Hostname: created.Hostname,
+		IPv4:     created.IPv4,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -200,9 +224,10 @@ func (a *API) getMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MachineResponse{
-		ID:   machine.ID,
-		Name: machine.Name,
-		IPv4: machine.IPv4,
+		ID:       machine.ID,
+		Name:     machine.Name,
+		Hostname: machine.Hostname,
+		IPv4:     machine.IPv4,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -257,9 +282,10 @@ func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MachineResponse{
-		ID:   machine.ID,
-		Name: machine.Name,
-		IPv4: machine.IPv4,
+		ID:       machine.ID,
+		Name:     machine.Name,
+		Hostname: machine.Hostname,
+		IPv4:     machine.IPv4,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -292,9 +318,10 @@ func (a *API) getMachineByIPv4Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MachineResponse{
-		ID:   machine.ID,
-		Name: machine.Name,
-		IPv4: machine.IPv4,
+		ID:       machine.ID,
+		Name:     machine.Name,
+		Hostname: machine.Hostname,
+		IPv4:     machine.IPv4,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

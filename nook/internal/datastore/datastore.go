@@ -8,9 +8,10 @@ import (
 )
 
 type Machine struct {
-	ID   int64  // Unique identifier
-	Name string // Machine name
-	IPv4 string // Unique IPv4 address
+	ID       int64  // Unique identifier
+	Name     string // Machine name
+	Hostname string // Hostname for NoCloud metadata
+	IPv4     string // Unique IPv4 address
 }
 
 type SSHKey struct {
@@ -40,6 +41,7 @@ func migrate(db *sql.DB) error {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS machines (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,
+		hostname TEXT NOT NULL,
 		ipv4 TEXT NOT NULL UNIQUE
 	);`)
 	if err != nil {
@@ -59,10 +61,13 @@ func (ds *Datastore) CreateMachine(m Machine) (Machine, error) {
 	if m.Name == "" {
 		return Machine{}, fmt.Errorf("machine name is required")
 	}
+	if m.Hostname == "" {
+		return Machine{}, fmt.Errorf("machine hostname is required")
+	}
 	if m.IPv4 == "" {
 		return Machine{}, fmt.Errorf("machine IPv4 is required")
 	}
-	res, err := ds.DB.Exec("INSERT INTO machines (name, ipv4) VALUES (?, ?)", m.Name, m.IPv4)
+	res, err := ds.DB.Exec("INSERT INTO machines (name, hostname, ipv4) VALUES (?, ?, ?)", m.Name, m.Hostname, m.IPv4)
 	if err != nil {
 		return Machine{}, err
 	}
@@ -77,7 +82,7 @@ func (ds *Datastore) CreateMachine(m Machine) (Machine, error) {
 // GetMachine retrieves a machine by ID.
 func (ds *Datastore) GetMachine(id int64) (*Machine, error) {
 	var m Machine
-	err := ds.DB.QueryRow("SELECT id, name, ipv4 FROM machines WHERE id = ?", id).Scan(&m.ID, &m.Name, &m.IPv4)
+	err := ds.DB.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE id = ?", id).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -89,7 +94,7 @@ func (ds *Datastore) GetMachine(id int64) (*Machine, error) {
 
 // ListMachines returns all machines in the database.
 func (ds *Datastore) ListMachines() ([]Machine, error) {
-	rows, err := ds.DB.Query("SELECT id, name, ipv4 FROM machines")
+	rows, err := ds.DB.Query("SELECT id, name, hostname, ipv4 FROM machines")
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +102,7 @@ func (ds *Datastore) ListMachines() ([]Machine, error) {
 	var machines []Machine
 	for rows.Next() {
 		var m Machine
-		if err := rows.Scan(&m.ID, &m.Name, &m.IPv4); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4); err != nil {
 			return nil, err
 		}
 		machines = append(machines, m)
@@ -114,7 +119,7 @@ func (ds *Datastore) DeleteMachine(id int64) error {
 // GetMachineByName retrieves a machine by its unique name.
 func (ds *Datastore) GetMachineByName(name string) (*Machine, error) {
 	var m Machine
-	err := ds.DB.QueryRow("SELECT id, name, ipv4 FROM machines WHERE name = ?", name).Scan(&m.ID, &m.Name, &m.IPv4)
+	err := ds.DB.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE name = ?", name).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -127,7 +132,7 @@ func (ds *Datastore) GetMachineByName(name string) (*Machine, error) {
 // GetMachineByIPv4 retrieves a machine by its unique IPv4 address.
 func (ds *Datastore) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	var m Machine
-	err := ds.DB.QueryRow("SELECT id, name, ipv4 FROM machines WHERE ipv4 = ?", ipv4).Scan(&m.ID, &m.Name, &m.IPv4)
+	err := ds.DB.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE ipv4 = ?", ipv4).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil

@@ -23,13 +23,15 @@ func TestCreateMachine(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestCreateMachine"))
 	require.NoError(t, err)
 	machine := Machine{
-		Name: "test-machine",
-		IPv4: "192.168.1.100",
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.168.1.100",
 	}
 	created, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
 	assert.NotZero(t, created.ID)
 	assert.Equal(t, machine.Name, created.Name)
+	assert.Equal(t, machine.Hostname, created.Hostname)
 	assert.Equal(t, machine.IPv4, created.IPv4)
 
 	// Test validation: missing name
@@ -46,8 +48,9 @@ func TestGetMachine(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestGetMachine"))
 	require.NoError(t, err)
 	machine := Machine{
-		Name: "get-machine",
-		IPv4: "10.0.0.1",
+		Name:     "get-machine",
+		Hostname: "get-host",
+		IPv4:     "10.0.0.1",
 	}
 	created, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
@@ -56,15 +59,16 @@ func TestGetMachine(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, created.ID, got.ID)
 	assert.Equal(t, created.Name, got.Name)
+	assert.Equal(t, created.Hostname, got.Hostname)
 }
 
 func TestListMachines(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestListMachines"))
 	require.NoError(t, err)
 	machines := []Machine{
-		{Name: "machine1", IPv4: "10.0.0.1"},
-		{Name: "machine2", IPv4: "10.0.0.2"},
-		{Name: "machine3", IPv4: "10.0.0.3"},
+		{Name: "machine1", Hostname: "host1", IPv4: "10.0.0.1"},
+		{Name: "machine2", Hostname: "host2", IPv4: "10.0.0.2"},
+		{Name: "machine3", Hostname: "host3", IPv4: "10.0.0.3"},
 	}
 	for _, m := range machines {
 		_, err := ds.CreateMachine(m)
@@ -74,18 +78,21 @@ func TestListMachines(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, got, len(machines))
 	names := map[string]bool{}
+	hostnames := map[string]bool{}
 	for _, m := range got {
 		names[m.Name] = true
+		hostnames[m.Hostname] = true
 	}
 	for _, m := range machines {
 		assert.True(t, names[m.Name], "machine %q not found in list", m.Name)
+		assert.True(t, hostnames[m.Hostname], "hostname %q not found in list", m.Hostname)
 	}
 }
 
 func TestDeleteMachine(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestDeleteMachine"))
 	require.NoError(t, err)
-	machine := Machine{Name: "delete-me", IPv4: "10.0.0.99"}
+	machine := Machine{Name: "delete-me", Hostname: "delete-host", IPv4: "10.0.0.99"}
 	created, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
 	// Delete the machine
@@ -103,7 +110,7 @@ func TestDeleteMachine(t *testing.T) {
 func TestGetMachineByName(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestGetMachineByName"))
 	require.NoError(t, err)
-	machine := Machine{Name: "find-me", IPv4: "10.0.0.42"}
+	machine := Machine{Name: "find-me", Hostname: "find-host", IPv4: "10.0.0.42"}
 	created, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
 	got, err := ds.GetMachineByName(machine.Name)
@@ -111,6 +118,7 @@ func TestGetMachineByName(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, created.ID, got.ID)
 	assert.Equal(t, created.Name, got.Name)
+	assert.Equal(t, created.Hostname, got.Hostname)
 	assert.Equal(t, created.IPv4, got.IPv4)
 	// Test not found
 	missing, err := ds.GetMachineByName("does-not-exist")
@@ -121,7 +129,7 @@ func TestGetMachineByName(t *testing.T) {
 func TestGetMachineByIPv4(t *testing.T) {
 	ds, err := New(testutil.NewTestDSN("TestGetMachineByIPv4"))
 	require.NoError(t, err)
-	machine := Machine{Name: "ip-machine", IPv4: "192.168.1.200"}
+	machine := Machine{Name: "ip-machine", Hostname: "ip-host", IPv4: "192.168.1.200"}
 	created, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
 	got, err := ds.GetMachineByIPv4(machine.IPv4)
@@ -129,6 +137,7 @@ func TestGetMachineByIPv4(t *testing.T) {
 	require.NotNil(t, got)
 	assert.Equal(t, created.ID, got.ID)
 	assert.Equal(t, created.Name, got.Name)
+	assert.Equal(t, created.Hostname, got.Hostname)
 	assert.Equal(t, created.IPv4, got.IPv4)
 	// Test not found
 	missing, err := ds.GetMachineByIPv4("10.0.0.254")
@@ -142,8 +151,9 @@ func TestCreateSSHKey(t *testing.T) {
 
 	// First, create a machine to associate the SSH key with
 	machine := Machine{
-		Name: "ssh-machine",
-		IPv4: "192.168.1.150",
+		Name:     "ssh-machine",
+		Hostname: "ssh-host",
+		IPv4:     "192.168.1.150",
 	}
 	createdMachine, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
@@ -169,8 +179,9 @@ func TestListSSHKeys(t *testing.T) {
 
 	// Create a machine
 	machine := Machine{
-		Name: "list-keys-machine",
-		IPv4: "192.168.1.160",
+		Name:     "list-keys-machine",
+		Hostname: "list-keys-host",
+		IPv4:     "192.168.1.160",
 	}
 	createdMachine, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
@@ -209,8 +220,9 @@ func TestGetSSHKey(t *testing.T) {
 
 	// Create a machine
 	machine := Machine{
-		Name: "get-key-machine",
-		IPv4: "192.168.1.170",
+		Name:     "get-key-machine",
+		Hostname: "get-key-host",
+		IPv4:     "192.168.1.170",
 	}
 	createdMachine, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
@@ -240,8 +252,9 @@ func TestDeleteSSHKey(t *testing.T) {
 
 	// Create a machine
 	machine := Machine{
-		Name: "delete-key-machine",
-		IPv4: "192.168.1.180",
+		Name:     "delete-key-machine",
+		Hostname: "delete-key-host",
+		IPv4:     "192.168.1.180",
 	}
 	createdMachine, err := ds.CreateMachine(machine)
 	require.NoError(t, err)
