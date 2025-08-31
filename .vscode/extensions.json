@@ -1,6 +1,6 @@
 {
-  "recommendations": [
-    "ms-vscode-remote.remote-ssh",
-    "redhat.ansible"
+  "recommendations": [    
+    "redhat.ansible",
+    "golang.go"
   ]
 }

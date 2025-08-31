@@ -21,3 +21,14 @@ This repository manages homelab infrastructure using Ansible. All automation, co
 - When editing the Ansible inventory, always order group names alphabetically and order hosts within each group alphabetically. Each group should be defined only once, and each host should be defined only once per group.
  - Always include `vars_files: [ ~/.homelab.vault ]` in new playbooks to load secrets from the user's vault file outside the repo.
  - For YAML consistency: use double quotes for variable interpolation (e.g., "{{ var }}"), and single quotes for plain strings or strings containing double quotes.
+
+## Go App Development (nook)
+
+- The Go module for nook is located in `nook/` and uses the import path `github.com/jbweber/homelab/nook`.
+- All Go code should follow idiomatic Go practices (see `.github/instructions/go.instructions.md`).
+- Use Go modules for dependency management.
+- Scaffold binaries in `nook/cmd/` and packages in `nook/internal/`.
+- Run `go mod tidy` after adding dependencies.
+- Use `gofmt` and `goimports` for formatting and import management.
+- To run the web service: `go run ./cmd/nook` from the `nook` directory.
+- Database: SQLite via `modernc.org/sqlite` for local metadata storage.
