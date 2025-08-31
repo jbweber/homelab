@@ -32,3 +32,21 @@ This repository manages homelab infrastructure using Ansible. All automation, co
 - Use `gofmt` and `goimports` for formatting and import management.
 - To run the web service: `go run ./cmd/nook` from the `nook` directory.
 - Database: SQLite via `modernc.org/sqlite` for local metadata storage.
+
+### nook services
+
+This service will let us provide the minimal endpoints needed for managing metadata for cloud-init running on our virtual machines. It also possibly could allow us to do other things in the future so we model both the metadata endpoints for cloud-init and the some api endpoints for our service.
+
+#### API Endpoints
+
+* /2021-01-03/dynamic/instance-identity/document
+* /2021-01-03/meta-data/public-keys
+* /2021-01-03/meta-data/public-keys/<int:idx>
+* /2021-01-03/meta-data/public-keys/<int:idx>/openssh-key
+* /latest/api/token
+* /meta-data
+* /user-data
+* /vendor-data
+* /api/v0/machines
+* /api/v0/networks
+* /api/v0/ssh-keys
