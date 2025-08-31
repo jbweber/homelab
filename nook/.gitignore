@@ -44,3 +44,4 @@ Thumbs.db
 # Build artifacts
 nook
 nook_unix
+nook.db

@@ -54,7 +54,6 @@ func migrate(db *sql.DB) error {
 	return err
 }
 
-// CreateMachine inserts a new machine into the database.
 // CreateMachine inserts a new machine into the database, validating required fields.
 func (ds *Datastore) CreateMachine(m Machine) (Machine, error) {
 	if m.Name == "" {
@@ -90,7 +89,7 @@ func (ds *Datastore) GetMachine(id int64) (*Machine, error) {
 
 // ListMachines returns all machines in the database.
 func (ds *Datastore) ListMachines() ([]Machine, error) {
-	rows, err := ds.DB.Query("SELECT id, name FROM machines")
+	rows, err := ds.DB.Query("SELECT id, name, ipv4 FROM machines")
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +97,7 @@ func (ds *Datastore) ListMachines() ([]Machine, error) {
 	var machines []Machine
 	for rows.Next() {
 		var m Machine
-		if err := rows.Scan(&m.ID, &m.Name); err != nil {
+		if err := rows.Scan(&m.ID, &m.Name, &m.IPv4); err != nil {
 			return nil, err
 		}
 		machines = append(machines, m)
