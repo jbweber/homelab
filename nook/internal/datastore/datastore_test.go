@@ -231,3 +231,212 @@ func TestGetMachineByIPv4(t *testing.T) {
 		t.Error("expected nil for missing machine, got non-nil")
 	}
 }
+
+func TestCreateSSHKey(t *testing.T) {
+	ds, err := New(testDSN("TestCreateSSHKey"))
+	if err != nil {
+		t.Fatalf("failed to create datastore: %v", err)
+	}
+
+	// First, create a machine to associate the SSH key with
+	machine := Machine{
+		Name: "ssh-machine",
+		IPv4: "192.168.1.150",
+	}
+	createdMachine, err := ds.CreateMachine(machine)
+	if err != nil {
+		t.Fatalf("failed to create machine: %v", err)
+	}
+
+	// Now create an SSH key for that machine
+	keyText := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey user@test"
+	keyID, err := ds.CreateSSHKey(createdMachine.ID, keyText)
+	if err != nil {
+		t.Fatalf("failed to create SSH key: %v", err)
+	}
+	if keyID == 0 {
+		t.Fatal("expected non-zero SSH key ID")
+	}
+
+	// Verify the key was stored correctly
+	retrievedKey, err := ds.GetSSHKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to retrieve SSH key: %v", err)
+	}
+	if retrievedKey == nil {
+		t.Fatal("expected SSH key to exist")
+	}
+	if retrievedKey.ID != keyID {
+		t.Fatalf("expected key ID %d, got %d", keyID, retrievedKey.ID)
+	}
+	if retrievedKey.MachineID != createdMachine.ID {
+		t.Fatalf("expected machine ID %d, got %d", createdMachine.ID, retrievedKey.MachineID)
+	}
+	if retrievedKey.KeyText != keyText {
+		t.Fatalf("expected key text %q, got %q", keyText, retrievedKey.KeyText)
+	}
+}
+
+func TestListSSHKeys(t *testing.T) {
+	ds, err := New(testDSN("TestListSSHKeys"))
+	if err != nil {
+		t.Fatalf("failed to create datastore: %v", err)
+	}
+
+	// Create a machine
+	machine := Machine{
+		Name: "list-keys-machine",
+		IPv4: "192.168.1.160",
+	}
+	createdMachine, err := ds.CreateMachine(machine)
+	if err != nil {
+		t.Fatalf("failed to create machine: %v", err)
+	}
+
+	// Initially should have no keys
+	keys, err := ds.ListSSHKeys(createdMachine.ID)
+	if err != nil {
+		t.Fatalf("failed to list SSH keys: %v", err)
+	}
+	if len(keys) != 0 {
+		t.Fatalf("expected 0 keys, got %d", len(keys))
+	}
+
+	// Add some keys
+	key1 := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkey1 user@test"
+	key2 := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkey2 user@test"
+
+	id1, err := ds.CreateSSHKey(createdMachine.ID, key1)
+	if err != nil {
+		t.Fatalf("failed to create first SSH key: %v", err)
+	}
+	id2, err := ds.CreateSSHKey(createdMachine.ID, key2)
+	if err != nil {
+		t.Fatalf("failed to create second SSH key: %v", err)
+	}
+
+	// List keys again
+	keys, err = ds.ListSSHKeys(createdMachine.ID)
+	if err != nil {
+		t.Fatalf("failed to list SSH keys: %v", err)
+	}
+	if len(keys) != 2 {
+		t.Fatalf("expected 2 keys, got %d", len(keys))
+	}
+
+	// Verify keys are in order (by ID)
+	if keys[0].ID != id1 || keys[1].ID != id2 {
+		t.Error("keys not returned in correct order")
+	}
+	if keys[0].KeyText != key1 || keys[1].KeyText != key2 {
+		t.Error("key texts don't match")
+	}
+	if keys[0].MachineID != createdMachine.ID || keys[1].MachineID != createdMachine.ID {
+		t.Error("machine IDs don't match")
+	}
+}
+
+func TestGetSSHKey(t *testing.T) {
+	ds, err := New(testDSN("TestGetSSHKey"))
+	if err != nil {
+		t.Fatalf("failed to create datastore: %v", err)
+	}
+
+	// Create a machine
+	machine := Machine{
+		Name: "get-key-machine",
+		IPv4: "192.168.1.170",
+	}
+	createdMachine, err := ds.CreateMachine(machine)
+	if err != nil {
+		t.Fatalf("failed to create machine: %v", err)
+	}
+
+	// Create an SSH key
+	keyText := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCgetkey user@test"
+	keyID, err := ds.CreateSSHKey(createdMachine.ID, keyText)
+	if err != nil {
+		t.Fatalf("failed to create SSH key: %v", err)
+	}
+
+	// Get the key
+	retrievedKey, err := ds.GetSSHKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to get SSH key: %v", err)
+	}
+	if retrievedKey == nil {
+		t.Fatal("expected SSH key to exist")
+	}
+	if retrievedKey.ID != keyID {
+		t.Fatalf("expected key ID %d, got %d", keyID, retrievedKey.ID)
+	}
+	if retrievedKey.MachineID != createdMachine.ID {
+		t.Fatalf("expected machine ID %d, got %d", createdMachine.ID, retrievedKey.MachineID)
+	}
+	if retrievedKey.KeyText != keyText {
+		t.Fatalf("expected key text %q, got %q", keyText, retrievedKey.KeyText)
+	}
+
+	// Test getting non-existent key
+	nonExistentKey, err := ds.GetSSHKey(99999)
+	if err != nil {
+		t.Fatalf("unexpected error for non-existent key: %v", err)
+	}
+	if nonExistentKey != nil {
+		t.Error("expected nil for non-existent key")
+	}
+}
+
+func TestDeleteSSHKey(t *testing.T) {
+	ds, err := New(testDSN("TestDeleteSSHKey"))
+	if err != nil {
+		t.Fatalf("failed to create datastore: %v", err)
+	}
+
+	// Create a machine
+	machine := Machine{
+		Name: "delete-key-machine",
+		IPv4: "192.168.1.180",
+	}
+	createdMachine, err := ds.CreateMachine(machine)
+	if err != nil {
+		t.Fatalf("failed to create machine: %v", err)
+	}
+
+	// Create an SSH key
+	keyText := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCdeletekey user@test"
+	keyID, err := ds.CreateSSHKey(createdMachine.ID, keyText)
+	if err != nil {
+		t.Fatalf("failed to create SSH key: %v", err)
+	}
+
+	// Verify key exists
+	retrievedKey, err := ds.GetSSHKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to get SSH key: %v", err)
+	}
+	if retrievedKey == nil {
+		t.Fatal("expected SSH key to exist before deletion")
+	}
+
+	// Delete the key
+	err = ds.DeleteSSHKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to delete SSH key: %v", err)
+	}
+
+	// Verify key no longer exists
+	deletedKey, err := ds.GetSSHKey(keyID)
+	if err != nil {
+		t.Fatalf("failed to get SSH key after deletion: %v", err)
+	}
+	if deletedKey != nil {
+		t.Error("expected SSH key to be deleted")
+	}
+
+	// Test deleting non-existent key (should not error)
+	err = ds.DeleteSSHKey(99999)
+	if err != nil {
+		t.Fatalf("unexpected error deleting non-existent key: %v", err)
+	}
+}
