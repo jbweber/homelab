@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strconv"
 
+	"log"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/jbweber/homelab/nook/internal/datastore"
 )
@@ -59,7 +61,9 @@ func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Req
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(doc)
+	if err := json.NewEncoder(w).Encode(doc); err != nil {
+		log.Printf("failed to encode instance identity document: %v", err)
+	}
 }
 
 // NewAPI creates a new API instance with the given datastore
@@ -97,7 +101,9 @@ manage_etc_hosts: true
 `
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(userData))
+	if _, err := w.Write([]byte(userData)); err != nil {
+		log.Printf("failed to write user data: %v", err)
+	}
 }
 
 // noCloudVendorDataHandler serves NoCloud-compatible vendor-data
@@ -105,7 +111,9 @@ func (a *API) noCloudVendorDataHandler(w http.ResponseWriter, r *http.Request) {
 	// For now, serve empty vendor-data
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(""))
+	if _, err := w.Write([]byte("")); err != nil {
+		log.Printf("failed to write vendor data: %v", err)
+	}
 }
 
 // noCloudNetworkConfigHandler serves NoCloud-compatible network-config
@@ -118,7 +126,9 @@ ethernets:
 `
 	w.Header().Set("Content-Type", "text/yaml")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(networkConfig))
+	if _, err := w.Write([]byte(networkConfig)); err != nil {
+		log.Printf("failed to write network config: %v", err)
+	}
 }
 
 // noCloudMetaDataHandler serves NoCloud-compatible metadata based on requestor IP
@@ -168,7 +178,9 @@ func (a *API) noCloudMetaDataHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/yaml")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(meta))
+	if _, err := w.Write([]byte(meta)); err != nil {
+		log.Printf("failed to write meta-data: %v", err)
+	}
 }
 
 // Machine request/response types
@@ -208,7 +220,9 @@ func (a *API) listMachinesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode machines response: %v", err)
+	}
 }
 
 // createMachineHandler handles POST /api/v0/machines
@@ -217,7 +231,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid JSON"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid JSON"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -225,7 +241,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" || req.Hostname == "" || req.IPv4 == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Name, Hostname, and IPv4 are required"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Name, Hostname, and IPv4 are required"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		fmt.Printf("[ERROR] missing required fields in machine creation: %+v\n", req)
 		return
 	}
@@ -234,7 +252,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if net.ParseIP(req.IPv4) == nil || !isIPv4(req.IPv4) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		fmt.Printf("[ERROR] invalid IPv4 address: %s\n", req.IPv4)
 		return
 	}
@@ -244,7 +264,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if existing != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusConflict)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "A machine with this IPv4 address already exists"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "A machine with this IPv4 address already exists"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		fmt.Printf("[ERROR] duplicate IPv4 address: %s\n", req.IPv4)
 		return
 	}
@@ -259,7 +281,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		fmt.Printf("[ERROR] failed to create machine: %v\n", err)
 		return
 	}
@@ -273,7 +297,9 @@ func (a *API) createMachineHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode machines response: %v", err)
+	}
 }
 
 // getMachineHandler handles GET /api/v0/machines/{id}
@@ -283,7 +309,9 @@ func (a *API) getMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid machine ID"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid machine ID"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -291,14 +319,18 @@ func (a *API) getMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
 	if machine == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -310,7 +342,9 @@ func (a *API) getMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode machine by name response: %v", err)
+	}
 }
 
 // deleteMachineHandler handles DELETE /api/v0/machines/{id}
@@ -320,7 +354,9 @@ func (a *API) deleteMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid machine ID"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid machine ID"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -328,7 +364,9 @@ func (a *API) deleteMachineHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to delete machine: %v", err)})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to delete machine: %v", err)}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -341,7 +379,9 @@ func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 	if name == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine name is required"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine name is required"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -349,14 +389,18 @@ func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
 	if machine == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -368,7 +412,9 @@ func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode network response: %v", err)
+	}
 }
 
 // getMachineByIPv4Handler handles GET /api/v0/machines/ipv4/{ipv4}
@@ -377,7 +423,9 @@ func (a *API) getMachineByIPv4Handler(w http.ResponseWriter, r *http.Request) {
 	if ipv4 == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "IPv4 address is required"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "IPv4 address is required"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -385,14 +433,18 @@ func (a *API) getMachineByIPv4Handler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to get machine: %v", err)}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
 	if machine == nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"})
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"}); err != nil {
+			log.Printf("failed to encode error response: %v", err)
+		}
 		return
 	}
 
@@ -404,17 +456,23 @@ func (a *API) getMachineByIPv4Handler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		log.Printf("failed to encode ssh keys response: %v", err)
+	}
 }
 
 func networksHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[networks endpoint placeholder]"))
+	if _, err := w.Write([]byte("[networks endpoint placeholder]")); err != nil {
+		log.Printf("failed to write networks endpoint placeholder: %v", err)
+	}
 }
 
 func sshKeysHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("[ssh-keys endpoint placeholder]"))
+	if _, err := w.Write([]byte("[ssh-keys endpoint placeholder]")); err != nil {
+		log.Printf("failed to write ssh-keys endpoint placeholder: %v", err)
+	}
 }
 
 // isIPv4 checks if a string is a valid IPv4 address

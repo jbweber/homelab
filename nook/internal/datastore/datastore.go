@@ -3,6 +3,7 @@ package datastore
 import (
 	"database/sql"
 	"fmt"
+	"log"
 
 	_ "modernc.org/sqlite"
 )
@@ -98,7 +99,11 @@ func (ds *Datastore) ListMachines() ([]Machine, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 	var machines []Machine
 	for rows.Next() {
 		var m Machine
@@ -148,7 +153,11 @@ func (ds *Datastore) ListSSHKeys(machineID int64) ([]SSHKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
 	var keys []SSHKey
 	for rows.Next() {
 		var k SSHKey

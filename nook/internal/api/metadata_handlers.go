@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -22,7 +23,9 @@ func (a *API) metaDataDirectoryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	for _, k := range keys {
-		fmt.Fprintln(w, k)
+		if _, err := fmt.Fprintln(w, k); err != nil {
+			log.Printf("failed to write metadata key: %v", err)
+		}
 	}
 }
 
@@ -31,5 +34,7 @@ func (a *API) metaDataKeyHandler(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
 	// For now, return placeholder. Next steps: map to actual machine fields.
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "[meta-data/%s placeholder]", key)
+	if _, err := fmt.Fprintf(w, "[meta-data/%s placeholder]", key); err != nil {
+		log.Printf("failed to write metadata key placeholder: %v", err)
+	}
 }

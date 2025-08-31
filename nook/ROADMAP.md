@@ -4,12 +4,15 @@ This file tracks the current development priorities and future plans for the Noo
 
 ## Roadmap (2025)
 
+
 - [ ] Improve error handling and validation
 - [ ] Add more integration tests for edge/error cases
 - [ ] Add security and access control (tokens, logging, etc.)
 - [ ] Update documentation and developer experience
 - [ ] Add deployment automation (Ansible, CI/CD)
 - [ ] Expand metadata endpoints (revisit after real-world testing)
+- [ ] Ensure all new features and changes follow the validation workflow (see README.md)
+- [ ] Require documentation and tests for all new endpoints/features
 
 ---
 

@@ -47,10 +47,6 @@ make build && ./nook
 ```bash
 # Run all tests
 make test
-
-# Run tests with coverage report
-make test-coverage
-
 # Run tests with coverage validation (requires 80% coverage)
 make test-coverage-validate
 

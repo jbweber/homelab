@@ -1,6 +1,5 @@
 # Makefile for Nook project
 
-# Go parameters
 GOCMD=go
 GOBUILD=$(GOCMD) build
 GOCLEAN=$(GOCMD) clean
@@ -9,6 +8,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
+GOIMPORTS=$(HOME)/go/bin/goimports
 
 # Main package path
 MAIN_PACKAGE=./cmd/nook
@@ -88,27 +88,31 @@ deps:
 	$(GOMOD) download
 	$(GOMOD) tidy
 
-# Format code
+
+# Format code (go fmt + goimports)
 .PHONY: fmt
 fmt:
 	$(GOFMT) ./...
+	$(GOIMPORTS) -w .
 
 # Vet code
 .PHONY: vet
 vet:
 	$(GOVET) ./...
 
-# Lint (requires golangci-lint to be installed)
+
+# Lint (uses explicit path for portability)
 .PHONY: lint
 lint:
-	golangci-lint run
+	$(HOME)/go/bin/golangci-lint run
 
-# Check formatting
+
+# Check formatting (go fmt + goimports)
 .PHONY: check-fmt
 check-fmt:
-	@if [ -n "$$($(GOFMT) -l ./...)" ]; then \
-		echo "The following files are not formatted:"; \
-		$(GOFMT) -l ./...; \
+	@if [ -n "$$($(GOIMPORTS) -l .)" ]; then \
+		echo "The following files are not formatted by goimports:"; \
+		$(GOIMPORTS) -l .; \
 		exit 1; \
 	fi
 
@@ -126,11 +130,17 @@ dev-setup: deps
 .PHONY: ci
 ci: check-fmt vet test-race test-coverage-validate
 
+
 # Install development tools
 .PHONY: install-tools
 install-tools:
-	$(GOCMD) install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-	$(GOCMD) install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(HOME)/go/bin v2.4.0
+	$(GOCMD) install golang.org/x/tools/cmd/goimports@latest
+# Static analysis (staticcheck)
+.PHONY: staticcheck
+staticcheck:
+	staticcheck ./...
+
 
 # Help
 .PHONY: help
@@ -146,12 +156,13 @@ help:
 	@echo "  clean                 - Clean build artifacts"
 	@echo "  run                   - Run the application"
 	@echo "  deps                  - Download and tidy dependencies"
-	@echo "  fmt                   - Format code"
+	@echo "  fmt                   - Format code (go fmt + goimports)"
 	@echo "  vet                   - Vet code"
 	@echo "  lint                  - Lint code (requires golangci-lint)"
-	@echo "  check-fmt             - Check code formatting"
+	@echo "  staticcheck           - Static analysis (requires staticcheck)"
+	@echo "  check-fmt             - Check code formatting (go fmt + goimports)"
 	@echo "  security              - Security check (requires gosec)"
 	@echo "  dev-setup             - Setup development environment"
 	@echo "  ci                    - Run CI pipeline (fmt check, vet, race test, coverage)"
-	@echo "  install-tools         - Install development tools"
+	@echo "  install-tools         - Install development tools (golangci-lint, gosec, goimports, staticcheck)"
 	@echo "  help                  - Show this help"

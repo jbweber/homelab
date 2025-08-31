@@ -29,7 +29,9 @@ func main() {
 
 	// Health check endpoint
 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, "Nook web service is running!")
+		if _, err := fmt.Fprintln(w, "Nook web service is running!"); err != nil {
+			log.Printf("failed to write response: %v", err)
+		}
 	})
 
 	fmt.Println("Starting Nook web service on :8080...")
