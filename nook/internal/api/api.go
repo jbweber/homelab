@@ -317,17 +317,26 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
 	r.Get("/network-config", a.noCloudNetworkConfigHandler)
 
-	// API v0 endpoints group
-	r.Route("/api/v0", func(r chi.Router) {
-		r.Get("/machines", a.listMachinesHandler)
-		r.Post("/machines", a.createMachineHandler)
-		r.Get("/machines/{id}", a.getMachineHandler)
-		r.Delete("/machines/{id}", a.deleteMachineHandler)
-		r.Get("/machines/name/{name}", a.getMachineByNameHandler)
-		r.Get("/machines/ipv4/{ipv4}", a.getMachineByIPv4Handler)
-		r.Patch("/machines/{id}", a.updateMachineHandler)
-		r.Get("/networks", networksHandler)
-		r.Get("/ssh-keys", a.sshKeysHandler)
+
+	// Machines endpoints group
+	r.Route("/api/v0/machines", func(r chi.Router) {
+		r.Get("/", a.listMachinesHandler)
+		r.Post("/", a.createMachineHandler)
+		r.Get("/{id}", a.getMachineHandler)
+		r.Delete("/{id}", a.deleteMachineHandler)
+		r.Get("/name/{name}", a.getMachineByNameHandler)
+		r.Get("/ipv4/{ipv4}", a.getMachineByIPv4Handler)
+		r.Patch("/{id}", a.updateMachineHandler)
+	})
+
+	// Networks endpoints group
+	r.Route("/api/v0/networks", func(r chi.Router) {
+		r.Get("/", networksHandler)
+	})
+
+	// SSH keys endpoints group
+	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
+		r.Get("/", a.sshKeysHandler)
 	})
 
 	// EC2-compatible and public-keys endpoints group
