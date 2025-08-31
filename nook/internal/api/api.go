@@ -307,6 +307,8 @@ func NewAPI(ds *datastore.Datastore) *API {
 
 // RegisterRoutes registers all API endpoints to the given chi router.
 func (a *API) RegisterRoutes(r chi.Router) {
+
+	// Metadata endpoints group
 	meta := NewMetaData(a.ds)
 	r.Get("/meta-data", meta.NoCloudMetaDataHandler)
 	r.Get("/meta-data/", meta.MetaDataDirectoryHandler)
@@ -315,21 +317,28 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
 	r.Get("/network-config", a.noCloudNetworkConfigHandler)
 
-	r.Get("/api/v0/machines", a.listMachinesHandler)
-	r.Post("/api/v0/machines", a.createMachineHandler)
-	r.Get("/api/v0/machines/{id}", a.getMachineHandler)
-	r.Delete("/api/v0/machines/{id}", a.deleteMachineHandler)
-	r.Get("/api/v0/machines/name/{name}", a.getMachineByNameHandler)
-	r.Get("/api/v0/machines/ipv4/{ipv4}", a.getMachineByIPv4Handler)
-	r.Patch("/api/v0/machines/{id}", a.updateMachineHandler)
-	r.Get("/api/v0/networks", networksHandler)
-	r.Get("/api/v0/ssh-keys", a.sshKeysHandler)
-	r.Get("/2021-01-03/dynamic/instance-identity/document", a.instanceIdentityDocumentHandler)
-	r.Get("/2021-01-03/meta-data/public-keys", a.publicKeysHandler)
+	// API v0 endpoints group
+	r.Route("/api/v0", func(r chi.Router) {
+		r.Get("/machines", a.listMachinesHandler)
+		r.Post("/machines", a.createMachineHandler)
+		r.Get("/machines/{id}", a.getMachineHandler)
+		r.Delete("/machines/{id}", a.deleteMachineHandler)
+		r.Get("/machines/name/{name}", a.getMachineByNameHandler)
+		r.Get("/machines/ipv4/{ipv4}", a.getMachineByIPv4Handler)
+		r.Patch("/machines/{id}", a.updateMachineHandler)
+		r.Get("/networks", networksHandler)
+		r.Get("/ssh-keys", a.sshKeysHandler)
+	})
 
-	// Register new public-keys endpoints
-	r.Get("/2021-01-03/meta-data/public-keys/{idx}", a.publicKeyByIdxHandler)
-	r.Get("/2021-01-03/meta-data/public-keys/{idx}/openssh-key", a.publicKeyOpenSSHHandler)
+	// EC2-compatible and public-keys endpoints group
+	r.Route("/2021-01-03", func(r chi.Router) {
+		r.Get("/dynamic/instance-identity/document", a.instanceIdentityDocumentHandler)
+		r.Route("/meta-data/public-keys", func(r chi.Router) {
+			r.Get("/", a.publicKeysHandler)
+			r.Get("/{idx}", a.publicKeyByIdxHandler)
+			r.Get("/{idx}/openssh-key", a.publicKeyOpenSSHHandler)
+		})
+	})
 }
 
 // noCloudUserDataHandler serves NoCloud-compatible user-data
