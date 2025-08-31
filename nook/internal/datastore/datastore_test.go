@@ -3,6 +3,8 @@ package datastore
 import (
 	"fmt"
 	"testing"
+
+	"github.com/jbweber/homelab/nook/internal/testutil"
 )
 
 // testDSN returns a unique in-memory SQLite DSN for each test.
@@ -13,7 +15,7 @@ func testDSN(testID string) string {
 }
 
 func TestNew_InMemory(t *testing.T) {
-	ds, err := New(testDSN("TestNew_InMemory"))
+	ds, err := New(testutil.NewTestDSN("TestNew_InMemory"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -32,7 +34,7 @@ func TestNew_InMemory(t *testing.T) {
 }
 
 func TestCreateMachine(t *testing.T) {
-	ds, err := New(testDSN("TestCreateMachine"))
+	ds, err := New(testutil.NewTestDSN("TestCreateMachine"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -69,7 +71,7 @@ func TestCreateMachine(t *testing.T) {
 }
 
 func TestGetMachine(t *testing.T) {
-	ds, err := New(testDSN("TestGetMachine"))
+	ds, err := New(testutil.NewTestDSN("TestGetMachine"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -97,7 +99,7 @@ func TestGetMachine(t *testing.T) {
 }
 
 func TestListMachines(t *testing.T) {
-	ds, err := New(testDSN("TestListMachines"))
+	ds, err := New(testutil.NewTestDSN("TestListMachines"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -131,7 +133,7 @@ func TestListMachines(t *testing.T) {
 }
 
 func TestDeleteMachine(t *testing.T) {
-	ds, err := New(testDSN("TestDeleteMachine"))
+	ds, err := New(testutil.NewTestDSN("TestDeleteMachine"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -161,7 +163,7 @@ func TestDeleteMachine(t *testing.T) {
 }
 
 func TestGetMachineByName(t *testing.T) {
-	ds, err := New(testDSN("TestGetMachineByName"))
+	ds, err := New(testutil.NewTestDSN("TestGetMachineByName"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -197,7 +199,7 @@ func TestGetMachineByName(t *testing.T) {
 }
 
 func TestGetMachineByIPv4(t *testing.T) {
-	ds, err := New(testDSN("TestGetMachineByIPv4"))
+	ds, err := New(testutil.NewTestDSN("TestGetMachineByIPv4"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -233,7 +235,7 @@ func TestGetMachineByIPv4(t *testing.T) {
 }
 
 func TestCreateSSHKey(t *testing.T) {
-	ds, err := New(testDSN("TestCreateSSHKey"))
+	ds, err := New(testutil.NewTestDSN("TestCreateSSHKey"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -278,7 +280,7 @@ func TestCreateSSHKey(t *testing.T) {
 }
 
 func TestListSSHKeys(t *testing.T) {
-	ds, err := New(testDSN("TestListSSHKeys"))
+	ds, err := New(testutil.NewTestDSN("TestListSSHKeys"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -337,7 +339,7 @@ func TestListSSHKeys(t *testing.T) {
 }
 
 func TestGetSSHKey(t *testing.T) {
-	ds, err := New(testDSN("TestGetSSHKey"))
+	ds, err := New(testutil.NewTestDSN("TestGetSSHKey"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}
@@ -388,7 +390,7 @@ func TestGetSSHKey(t *testing.T) {
 }
 
 func TestDeleteSSHKey(t *testing.T) {
-	ds, err := New(testDSN("TestDeleteSSHKey"))
+	ds, err := New(testutil.NewTestDSN("TestDeleteSSHKey"))
 	if err != nil {
 		t.Fatalf("failed to create datastore: %v", err)
 	}

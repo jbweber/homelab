@@ -9,11 +9,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jbweber/homelab/nook/internal/datastore"
+	"github.com/jbweber/homelab/nook/internal/testutil"
 )
 
 func setupTestAPI(t *testing.T) *chi.Mux {
 	// Create test datastore
-	testDS, err := datastore.New(":memory:")
+	testDS, err := datastore.New(testutil.NewTestDSN("TestAPI"))
 	if err != nil {
 		t.Fatalf("Failed to create test datastore: %v", err)
 	}
