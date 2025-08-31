@@ -563,5 +563,315 @@ func TestSSHKeysHandler_Placeholder(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "[ssh-keys endpoint placeholder]", w.Body.String())
+	assert.Equal(t, "[]\n", w.Body.String())
+}
+
+func TestUpdateMachineHandler_Success(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine first
+	reqBody := CreateMachineRequest{
+		Name:     "update-machine",
+		Hostname: "update-host",
+		IPv4:     "192.168.1.160",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var created MachineResponse
+	json.NewDecoder(w.Body).Decode(&created)
+
+	// Update the machine
+	updateBody := CreateMachineRequest{
+		Name:     "updated-machine",
+		Hostname: "updated-host",
+		IPv4:     "192.168.1.161",
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), bytes.NewReader(updateJSON))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusOK, patchW.Code)
+	var updated MachineResponse
+	json.NewDecoder(patchW.Body).Decode(&updated)
+	assert.Equal(t, updateBody.Name, updated.Name)
+	assert.Equal(t, updateBody.Hostname, updated.Hostname)
+	assert.Equal(t, updateBody.IPv4, updated.IPv4)
+}
+
+func TestUpdateMachineHandler_InvalidID(t *testing.T) {
+	r := setupTestAPI(t)
+	updateBody := CreateMachineRequest{
+		Name:     "updated-machine",
+		Hostname: "updated-host",
+		IPv4:     "192.168.1.161",
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/invalid", bytes.NewReader(updateJSON))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusBadRequest, patchW.Code)
+}
+
+func TestUpdateMachineHandler_MissingFields(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine first
+	reqBody := CreateMachineRequest{
+		Name:     "update-machine",
+		Hostname: "update-host",
+		IPv4:     "192.168.1.160",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var created MachineResponse
+	json.NewDecoder(w.Body).Decode(&created)
+
+	// Missing fields
+	updateBody := CreateMachineRequest{Name: ""}
+	updateJSON, _ := json.Marshal(updateBody)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), bytes.NewReader(updateJSON))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusBadRequest, patchW.Code)
+}
+
+func TestUpdateMachineHandler_NotFound(t *testing.T) {
+	r := setupTestAPI(t)
+	updateBody := CreateMachineRequest{
+		Name:     "updated-machine",
+		Hostname: "updated-host",
+		IPv4:     "192.168.1.161",
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/99999", bytes.NewReader(updateJSON))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusNotFound, patchW.Code)
+}
+
+func TestPublicKeysHandler_Success(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine
+	reqBody := CreateMachineRequest{
+		Name:     "ssh-machine",
+		Hostname: "ssh-host",
+		IPv4:     "192.168.1.170",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.170:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var created MachineResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
+
+	// Insert SSH key for this machine
+	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
+	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1")
+	ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2")
+
+	// Use X-Forwarded-For to trigger publicKeysHandler
+	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.170")
+	w2 := httptest.NewRecorder()
+	api := NewAPI(ds)
+	mux := chi.NewRouter()
+	api.RegisterRoutes(mux)
+	mux.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	bodyStr := w2.Body.String()
+	assert.Contains(t, bodyStr, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1")
+	assert.Contains(t, bodyStr, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2")
+}
+
+func TestPublicKeysHandler_NotFound(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Not in test DB
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
+func TestPublicKeysHandler_LookupError(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	req.Header.Set("X-Forwarded-For", "invalid-ip")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	// Should be 404 due to not found
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
+func TestPublicKeyByIdxHandler_Success(t *testing.T) {
+	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
+	api := NewAPI(ds)
+	mux := chi.NewRouter()
+	api.RegisterRoutes(mux)
+
+	// Create machine and keys
+	reqBody := CreateMachineRequest{
+		Name:     "idx-machine",
+		Hostname: "idx-host",
+		IPv4:     "192.168.1.180",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.180:12345"
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	var created MachineResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
+
+	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCidxkey1")
+	ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2")
+
+	// Get key at idx 1
+	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/1", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.180")
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Contains(t, w2.Body.String(), "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2")
+}
+
+func TestPublicKeyByIdxHandler_NotFound(t *testing.T) {
+	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
+	api := NewAPI(ds)
+	mux := chi.NewRouter()
+	api.RegisterRoutes(mux)
+
+	// No machine for IP
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.99")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+
+	// Create machine with unique name/IP, no keys
+	reqBody := CreateMachineRequest{
+		Name:     "idx-machine-unique",
+		Hostname: "idx-host-unique",
+		IPv4:     "192.168.1.182",
+	}
+	body, _ := json.Marshal(reqBody)
+	req2 := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.RemoteAddr = "192.168.1.182:12345"
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+	var created MachineResponse
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&created))
+
+	// Out of range idx
+	req3 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0", nil)
+	req3.Header.Set("X-Forwarded-For", "192.168.1.182")
+	w3 := httptest.NewRecorder()
+	mux.ServeHTTP(w3, req3)
+	assert.Equal(t, http.StatusNotFound, w3.Code)
+	assert.Contains(t, w3.Body.String(), "key index out of range")
+}
+
+func TestPublicKeyByIdxHandler_InvalidIndex(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/invalid", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.170")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid key index")
+}
+
+func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
+	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
+	api := NewAPI(ds)
+	mux := chi.NewRouter()
+	api.RegisterRoutes(mux)
+
+	// Create machine and keys
+	reqBody := CreateMachineRequest{
+		Name:     "openssh-machine",
+		Hostname: "openssh-host",
+		IPv4:     "192.168.1.190",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.190:12345"
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	var created MachineResponse
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
+
+	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1")
+
+	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.190")
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.Contains(t, w2.Body.String(), "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1")
+}
+
+func TestPublicKeyOpenSSHHandler_NotFound(t *testing.T) {
+	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
+	api := NewAPI(ds)
+	mux := chi.NewRouter()
+	api.RegisterRoutes(mux)
+
+	// No machine for IP
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.99")
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+
+	// Create machine with unique name/IP, no keys
+	reqBody := CreateMachineRequest{
+		Name:     "openssh-machine-unique",
+		Hostname: "openssh-host-unique",
+		IPv4:     "192.168.1.192",
+	}
+	body, _ := json.Marshal(reqBody)
+	req2 := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req2.Header.Set("Content-Type", "application/json")
+	req2.RemoteAddr = "192.168.1.192:12345"
+	w2 := httptest.NewRecorder()
+	mux.ServeHTTP(w2, req2)
+	var created MachineResponse
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&created))
+
+	// Out of range idx
+	req3 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req3.Header.Set("X-Forwarded-For", "192.168.1.192")
+	w3 := httptest.NewRecorder()
+	mux.ServeHTTP(w3, req3)
+	assert.Equal(t, http.StatusNotFound, w3.Code)
+	assert.Contains(t, w3.Body.String(), "key index out of range")
+}
+
+func TestPublicKeyOpenSSHHandler_InvalidIndex(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/invalid/openssh-key", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.170")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid key index")
 }

@@ -8,6 +8,8 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// ...existing code...
+
 type Machine struct {
 	ID       int64  // Unique identifier
 	Name     string // Machine name
@@ -23,6 +25,50 @@ type SSHKey struct {
 
 type Datastore struct {
 	DB *sql.DB
+}
+
+// ListAllSSHKeys returns all SSH keys in the system, ordered by id.
+func (ds *Datastore) ListAllSSHKeys() ([]SSHKey, error) {
+	rows, err := ds.DB.Query("SELECT id, machine_id, key_text FROM ssh_keys ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Printf("failed to close rows: %v", err)
+		}
+	}()
+	var keys []SSHKey
+	for rows.Next() {
+		var k SSHKey
+		if err := rows.Scan(&k.ID, &k.MachineID, &k.KeyText); err != nil {
+			return nil, err
+		}
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+// UpdateMachine updates an existing machine's details by ID.
+func (ds *Datastore) UpdateMachine(m Machine) (Machine, error) {
+	if m.ID == 0 {
+		return Machine{}, fmt.Errorf("machine ID is required")
+	}
+	if m.Name == "" {
+		return Machine{}, fmt.Errorf("machine name is required")
+	}
+	if m.Hostname == "" {
+		return Machine{}, fmt.Errorf("machine hostname is required")
+	}
+	if m.IPv4 == "" {
+		return Machine{}, fmt.Errorf("machine IPv4 is required")
+	}
+	_, err := ds.DB.Exec("UPDATE machines SET name = ?, hostname = ?, ipv4 = ? WHERE id = ?", m.Name, m.Hostname, m.IPv4, m.ID)
+	if err != nil {
+		return Machine{}, err
+	}
+	// Return the updated machine
+	return m, nil
 }
 
 // New creates a new Datastore and runs migrations.
