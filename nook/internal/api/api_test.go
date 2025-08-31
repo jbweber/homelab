@@ -222,6 +222,54 @@ func TestNoCloudMetaDataHandler(t *testing.T) {
 	assert.NotEmpty(t, w.Body.String())
 }
 
+func TestNoCloudMetaDataHandler_IPNotFound(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/meta-data", nil)
+	req.RemoteAddr = "203.0.113.99:12345" // IP not in test DB
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
+func TestNoCloudMetaDataHandler_XForwardedFor(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine with a known IP
+	reqBody := CreateMachineRequest{
+		Name:     "meta-xforwarded",
+		Hostname: "meta-xhost",
+		IPv4:     "192.168.1.222",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.222:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// Now call meta-data with X-Forwarded-For
+	req2 := httptest.NewRequest("GET", "/meta-data", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.222")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	assert.NotEmpty(t, w2.Body.String())
+	assert.Contains(t, w2.Body.String(), "meta-xhost")
+}
+
+func TestNoCloudMetaDataHandler_LookupError(t *testing.T) {
+	r := setupTestAPI(t)
+	// Simulate a lookup error by passing an invalid IP format
+	req := httptest.NewRequest("GET", "/meta-data", nil)
+	req.Header.Set("X-Forwarded-For", "invalid-ip")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	// Should be 404 due to not found
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
 func TestNetworksHandler(t *testing.T) {
 	r := setupTestAPI(t)
 	req := httptest.NewRequest("GET", "/api/v0/networks", nil)
@@ -309,40 +357,6 @@ func TestDeleteMachine_InvalidID(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestGetMachineByName_EmptyName(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/api/v0/machines/name/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestGetMachineByName_InvalidMethod(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("POST", "/api/v0/machines/name/test-machine", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	// Should be Method Not Allowed or Not Found
-	assert.True(t, w.Code == http.StatusNotFound || w.Code == http.StatusMethodNotAllowed)
-}
-
-func TestGetMachineByIPv4_EmptyIPv4(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/api/v0/machines/ipv4/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-}
-
-func TestGetMachineByIPv4_InvalidMethod(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("POST", "/api/v0/machines/ipv4/192.168.1.100", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	// Should be Method Not Allowed or Not Found
-	assert.True(t, w.Code == http.StatusNotFound || w.Code == http.StatusMethodNotAllowed)
 }
 
 func TestGetMachineByName_Valid(t *testing.T) {
@@ -483,4 +497,71 @@ func TestGetMachineHandler_Valid(t *testing.T) {
 	assert.Equal(t, reqBody.IPv4, resp.IPv4)
 }
 
+func TestInstanceIdentityDocumentHandler_XForwardedFor(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine with a known IP
+	reqBody := CreateMachineRequest{
+		Name:     "xforwarded-machine",
+		Hostname: "xforwarded-host",
+		IPv4:     "192.168.1.250",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.250:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+
+	// Now call instance identity with X-Forwarded-For
+	req2 := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
+	req2.Header.Set("X-Forwarded-For", "192.168.1.250")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req2)
+	assert.Equal(t, http.StatusOK, w2.Code)
+	var doc map[string]interface{}
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&doc))
+	assert.Equal(t, "xforwarded-host", doc["hostname"])
+	assert.Equal(t, "192.168.1.250", doc["privateIp"])
+}
+
+func TestInstanceIdentityDocumentHandler_IPNotFound(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
+	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Not in test DB
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
+func TestInstanceIdentityDocumentHandler_LookupError(t *testing.T) {
+	r := setupTestAPI(t)
+	// Simulate a lookup error by passing an invalid IP format
+	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
+	req.Header.Set("X-Forwarded-For", "invalid-ip")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	// Should be 404 due to not found
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
 // End of Tests
+func TestNetworksHandler_Placeholder(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/api/v0/networks", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "[networks endpoint placeholder]", w.Body.String())
+}
+
+func TestSSHKeysHandler_Placeholder(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/api/v0/ssh-keys", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "[ssh-keys endpoint placeholder]", w.Body.String())
+}

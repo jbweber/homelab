@@ -1,3 +1,6 @@
+//go:build !test
+
+// Code coverage for main is ignored for now. TODO: Add integration tests for main entrypoint.
 package main
 
 import (

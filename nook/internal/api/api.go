@@ -376,14 +376,6 @@ func (a *API) deleteMachineHandler(w http.ResponseWriter, r *http.Request) {
 // getMachineByNameHandler handles GET /api/v0/machines/name/{name}
 func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	if name == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine name is required"}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
-		}
-		return
-	}
 
 	machine, err := a.ds.GetMachineByName(name)
 	if err != nil {
@@ -420,14 +412,6 @@ func (a *API) getMachineByNameHandler(w http.ResponseWriter, r *http.Request) {
 // getMachineByIPv4Handler handles GET /api/v0/machines/ipv4/{ipv4}
 func (a *API) getMachineByIPv4Handler(w http.ResponseWriter, r *http.Request) {
 	ipv4 := chi.URLParam(r, "ipv4")
-	if ipv4 == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "IPv4 address is required"}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
-		}
-		return
-	}
 
 	machine, err := a.ds.GetMachineByIPv4(ipv4)
 	if err != nil {
