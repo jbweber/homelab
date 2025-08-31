@@ -1,6 +1,7 @@
 {
   "recommendations": [    
     "redhat.ansible",
-    "golang.go"
+    "golang.go",
+    "ryanluker.vscode-coverage-gutters"
   ]
 }

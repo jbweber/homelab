@@ -30,8 +30,18 @@ This repository manages homelab infrastructure using Ansible. All automation, co
 - Scaffold binaries in `nook/cmd/` and packages in `nook/internal/`.
 - Run `go mod tidy` after adding dependencies.
 - Use `gofmt` and `goimports` for formatting and import management.
-- To run the web service: `go run ./cmd/nook` from the `nook` directory.
-- Database: SQLite via `modernc.org/sqlite` for local metadata storage.
+  - Use the Makefile in `nook/` for all build, test, coverage, and CI operations:
+    - `make build` — build the binary
+    - `make test` — run all unit tests
+    - `make test-coverage` — run tests and generate coverage report
+    - `make test-race` — run tests with race detection
+    - `make ci` — run full CI pipeline locally
+  - To run the web service: `go run ./cmd/nook` from the `nook` directory.
+  - Database: SQLite via `modernc.org/sqlite` for local metadata storage.
+
+  - Integration tests: Use `test_api.sh` in `nook/` to test the real running app. Update this script as endpoints change or new features are added. Always ensure it covers all critical API and metadata endpoints.
+
+  - Roadmap: See `nook/ROADMAP.md` for the current development priorities and future plans.
 
 ### nook services
 
