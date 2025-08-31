@@ -330,13 +330,15 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// Networks endpoints group
+	networks := NewNetworks(nil)
 	r.Route("/api/v0/networks", func(r chi.Router) {
-		r.Get("/", networksHandler)
+		r.Get("/", networks.NetworksHandler)
 	})
 
 	// SSH keys endpoints group
+	sshKeys := NewSSHKeys(a.ds)
 	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
-		r.Get("/", a.sshKeysHandler)
+		r.Get("/", sshKeys.SSHKeysHandler)
 	})
 
 	// EC2-compatible and public-keys endpoints group
