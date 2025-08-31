@@ -1,0 +1,11 @@
+---
+
+- name: Download and verify libvirt images
+  ansible.builtin.get_url:
+    url: "{{ item.url }}"
+    dest: "/var/lib/libvirt/images/{{ item.name }}.{{ item.format }}"
+    checksum: "{{ item.checksum }}"
+    mode: '0644'
+  loop: "{{ images }}"
+  loop_control:
+    label: "{{ item.name }}.{{ item.format }}"

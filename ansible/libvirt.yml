@@ -3,9 +3,10 @@
   hosts: libvirt
   become: true
   vars_files:
-    - ~/.homelab.vault
+    - ~/.homelab.vault  
   tasks:
     - name: Ping all libvirt hosts
       ansible.builtin.ping:
   roles:
     - libvirt
+    - libvirt-images

@@ -1,0 +1,9 @@
+---
+
+- name: Remove unused packages
+  ansible.builtin.package:
+    name:
+      - "abrt*"
+      - "sssd*"
+    state: absent
+    autoremove: true

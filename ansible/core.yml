@@ -8,3 +8,4 @@
       ansible.builtin.ping:
   roles:
     - role: linux-system-roles.network
+    - role: common
