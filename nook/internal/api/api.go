@@ -13,6 +13,8 @@ import (
 	"github.com/jbweber/homelab/nook/internal/datastore"
 )
 
+// ...existing code...
+
 // API holds the datastore dependency
 type API struct {
 	ds *datastore.Datastore
@@ -60,7 +62,9 @@ func (a *API) publicKeyByIdxHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintln(w, keys[idx].KeyText)
+	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
+		log.Printf("failed to write public key by idx: %v", err)
+	}
 }
 
 // publicKeyOpenSSHHandler serves the OpenSSH-formatted key for a specific index.
@@ -105,7 +109,9 @@ func (a *API) publicKeyOpenSSHHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	fmt.Fprintln(w, keys[idx].KeyText) // For now, assume KeyText is OpenSSH format
+	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
+		log.Printf("failed to write public key OpenSSH: %v", err)
+	}
 }
 
 // publicKeysHandler serves a list of SSH public keys for the requesting machine (cloud-init format).
@@ -145,7 +151,9 @@ func (a *API) publicKeysHandler(w http.ResponseWriter, r *http.Request) {
 	// Format: one key per line (cloud-init expects this)
 	w.Header().Set("Content-Type", "text/plain")
 	for _, k := range keys {
-		fmt.Fprintln(w, k.KeyText)
+		if _, err := fmt.Fprintln(w, k.KeyText); err != nil {
+			log.Printf("failed to write public key: %v", err)
+		}
 	}
 }
 
@@ -299,9 +307,10 @@ func NewAPI(ds *datastore.Datastore) *API {
 
 // RegisterRoutes registers all API endpoints to the given chi router.
 func (a *API) RegisterRoutes(r chi.Router) {
-	r.Get("/meta-data", a.noCloudMetaDataHandler)
-	r.Get("/meta-data/", a.metaDataDirectoryHandler)
-	r.Get("/meta-data/{key}", a.metaDataKeyHandler)
+	meta := NewMetaData(a.ds)
+	r.Get("/meta-data", meta.NoCloudMetaDataHandler)
+	r.Get("/meta-data/", meta.MetaDataDirectoryHandler)
+	r.Get("/meta-data/{key}", meta.MetaDataKeyHandler)
 	r.Get("/user-data", a.noCloudUserDataHandler)
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
 	r.Get("/network-config", a.noCloudNetworkConfigHandler)
@@ -360,58 +369,6 @@ ethernets:
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(networkConfig)); err != nil {
 		log.Printf("failed to write network config: %v", err)
-	}
-}
-
-// noCloudMetaDataHandler serves NoCloud-compatible metadata based on requestor IP
-func (a *API) noCloudMetaDataHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract requestor IP, prefer X-Forwarded-For if present
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			fmt.Printf("[ERROR] unable to parse remote address: %v\n", err)
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Lookup machine by IPv4
-	machine, err := a.ds.GetMachineByIPv4(ip)
-	if err != nil {
-		fmt.Printf("[ERROR] failed to lookup machine by IP %s: %v\n", ip, err)
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		fmt.Printf("[ERROR] machine not found for IP %s\n", ip)
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-
-	// Format instance-id as iid-XXXXXXXX (8-digit zero-padded ID)
-	instanceID := fmt.Sprintf("iid-%08d", machine.ID)
-
-	// Compose NoCloud metadata (YAML)
-	meta := fmt.Sprintf(
-		"instance-id: %s\n"+
-			"hostname: %s\n"+
-			"local-hostname: %s\n"+
-			"local-ipv4: %s\n"+
-			"public-hostname: %s\n"+
-			"security-groups: default\n",
-		instanceID,
-		machine.Hostname,
-		machine.Hostname,
-		machine.IPv4,
-		machine.Hostname,
-	)
-
-	w.Header().Set("Content-Type", "text/yaml")
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte(meta)); err != nil {
-		log.Printf("failed to write meta-data: %v", err)
 	}
 }
 

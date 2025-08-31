@@ -299,11 +299,28 @@ func TestMetaDataDirectoryHandler(t *testing.T) {
 
 func TestMetaDataKeyHandler(t *testing.T) {
 	r := setupTestAPI(t)
+	// Create a machine for the test IP
+	reqBody := CreateMachineRequest{
+		Name:     "meta-key-machine",
+		Hostname: "meta-key-host",
+		IPv4:     "192.168.1.250",
+	}
+	body, _ := json.Marshal(reqBody)
+	createReq := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.RemoteAddr = "192.168.1.250:12345"
+	createW := httptest.NewRecorder()
+	r.ServeHTTP(createW, createReq)
+	assert.Equal(t, http.StatusCreated, createW.Code)
+
+	// Now request the metadata key for the same IP
 	req := httptest.NewRequest("GET", "/meta-data/instance-id", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.250")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Contains(t, w.Body.String(), "[meta-data/instance-id placeholder]")
+	// The output should be the instance-id value, e.g. "iid-00000001\n"
+	assert.Regexp(t, `iid-\d{8}\n`, w.Body.String())
 }
 
 func TestInstanceIdentityDocumentHandler_MachineNotFound(t *testing.T) {
@@ -503,26 +520,26 @@ func TestInstanceIdentityDocumentHandler_XForwardedFor(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "xforwarded-machine",
 		Hostname: "xforwarded-host",
-		IPv4:     "192.168.1.250",
+		IPv4:     "192.168.1.251",
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.168.1.250:12345"
+	req.RemoteAddr = "192.168.1.251:12345"
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusCreated, w.Code)
 
 	// Now call instance identity with X-Forwarded-For
 	req2 := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req2.Header.Set("X-Forwarded-For", "192.168.1.250")
+	req2.Header.Set("X-Forwarded-For", "192.168.1.251")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
 	assert.Equal(t, http.StatusOK, w2.Code)
 	var doc map[string]interface{}
 	require.NoError(t, json.NewDecoder(w2.Body).Decode(&doc))
 	assert.Equal(t, "xforwarded-host", doc["hostname"])
-	assert.Equal(t, "192.168.1.250", doc["privateIp"])
+	assert.Equal(t, "192.168.1.251", doc["privateIp"])
 }
 
 func TestInstanceIdentityDocumentHandler_IPNotFound(t *testing.T) {
@@ -581,7 +598,8 @@ func TestUpdateMachineHandler_Success(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusCreated, w.Code)
 	var created MachineResponse
-	json.NewDecoder(w.Body).Decode(&created)
+	err := json.NewDecoder(w.Body).Decode(&created)
+	require.NoError(t, err)
 
 	// Update the machine
 	updateBody := CreateMachineRequest{
@@ -596,7 +614,8 @@ func TestUpdateMachineHandler_Success(t *testing.T) {
 	r.ServeHTTP(patchW, patchReq)
 	assert.Equal(t, http.StatusOK, patchW.Code)
 	var updated MachineResponse
-	json.NewDecoder(patchW.Body).Decode(&updated)
+	err = json.NewDecoder(patchW.Body).Decode(&updated)
+	require.NoError(t, err)
 	assert.Equal(t, updateBody.Name, updated.Name)
 	assert.Equal(t, updateBody.Hostname, updated.Hostname)
 	assert.Equal(t, updateBody.IPv4, updated.IPv4)
@@ -631,7 +650,8 @@ func TestUpdateMachineHandler_MissingFields(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	var created MachineResponse
-	json.NewDecoder(w.Body).Decode(&created)
+	err := json.NewDecoder(w.Body).Decode(&created)
+	require.NoError(t, err)
 
 	// Missing fields
 	updateBody := CreateMachineRequest{Name: ""}
@@ -678,8 +698,10 @@ func TestPublicKeysHandler_Success(t *testing.T) {
 
 	// Insert SSH key for this machine
 	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
-	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1")
-	ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2")
+	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1")
+	require.NoError(t, err)
+	_, err = ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2")
+	require.NoError(t, err)
 
 	// Use X-Forwarded-For to trigger publicKeysHandler
 	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
@@ -737,8 +759,10 @@ func TestPublicKeyByIdxHandler_Success(t *testing.T) {
 	var created MachineResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 
-	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCidxkey1")
-	ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2")
+	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCidxkey1")
+	require.NoError(t, err)
+	_, err = ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2")
+	require.NoError(t, err)
 
 	// Get key at idx 1
 	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/1", nil)
@@ -818,7 +842,8 @@ func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
 	var created MachineResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 
-	ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1")
+	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1")
+	require.NoError(t, err)
 
 	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
 	req2.Header.Set("X-Forwarded-For", "192.168.1.190")
