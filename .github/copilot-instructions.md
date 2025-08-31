@@ -20,3 +20,4 @@ This repository manages homelab infrastructure using Ansible. All automation, co
 - Document any custom roles or playbooks in `README.md`.
 - When editing the Ansible inventory, always order group names alphabetically and order hosts within each group alphabetically. Each group should be defined only once, and each host should be defined only once per group.
  - Always include `vars_files: [ ~/.homelab.vault ]` in new playbooks to load secrets from the user's vault file outside the repo.
+ - For YAML consistency: use double quotes for variable interpolation (e.g., "{{ var }}"), and single quotes for plain strings or strings containing double quotes.
