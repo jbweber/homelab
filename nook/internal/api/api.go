@@ -20,7 +20,6 @@ import (
 type API struct {
 	machineRepo repository.MachineRepository
 	sshKeyRepo  repository.SSHKeyRepository
-	ds          *datastore.Datastore // Keep datastore for backward compatibility
 }
 
 // machineStoreAdapter adapts MachineRepository to MachinesStore interface
@@ -98,6 +97,22 @@ func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]datastore.SSHKey, 
 	return a.sshKeyRepo.FindByMachineID(context.Background(), machineID)
 }
 
+// metaDataStoreAdapter adapts MachineRepository to MetaDataStore interface
+type metaDataStoreAdapter struct {
+	machineRepo repository.MachineRepository
+}
+
+func (a *metaDataStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine, error) {
+	machine, err := a.machineRepo.FindByIPv4(context.Background(), ipv4)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &machine, nil
+}
+
 // extractClientIP extracts the client IP from the request, preferring X-Forwarded-For header
 // over RemoteAddr. Returns an error if the IP cannot be parsed.
 func extractClientIP(r *http.Request) (string, error) {
@@ -160,19 +175,19 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if machine exists
-	machine, err := a.ds.GetMachine(id)
+	machine, err := a.machineRepo.FindByID(context.Background(), id)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusNotFound)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
 		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Failed to get machine"}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
-		}
-		return
-	}
-	if machine == nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Machine not found"}); err != nil {
 			log.Printf("failed to encode error response: %v", err)
 		}
 		return
@@ -183,7 +198,7 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	machine.Hostname = req.Hostname
 	machine.IPv4 = req.IPv4
 
-	updated, err := a.ds.UpdateMachine(*machine)
+	updated, err := a.machineRepo.Save(context.Background(), machine)
 	if err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusInternalServerError)
@@ -218,15 +233,15 @@ func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Req
 	}
 
 	// Lookup machine by IPv4
-	machine, err := a.ds.GetMachineByIPv4(ip)
+	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			fmt.Printf("[ERROR] machine not found for IP %s\n", ip)
+			http.Error(w, "machine not found for IP", http.StatusNotFound)
+			return
+		}
 		fmt.Printf("[ERROR] failed to lookup machine by IP %s: %v\n", ip, err)
 		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		fmt.Printf("[ERROR] machine not found for IP %s\n", ip)
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
 		return
 	}
 
@@ -251,12 +266,11 @@ func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Req
 	}
 }
 
-// NewAPI creates a new API instance with the given datastore
+// NewAPI creates a new API instance with repositories initialized from the datastore
 func NewAPI(ds *datastore.Datastore) *API {
 	return &API{
 		machineRepo: repository.NewMachineRepository(ds),
 		sshKeyRepo:  repository.NewSSHKeyRepository(ds),
-		ds:          ds, // Keep datastore for backward compatibility
 	}
 }
 
@@ -264,7 +278,8 @@ func NewAPI(ds *datastore.Datastore) *API {
 func (a *API) RegisterRoutes(r chi.Router) {
 
 	// Metadata endpoints group
-	meta := NewMetaData(a.ds)
+	metaAdapter := &metaDataStoreAdapter{machineRepo: a.machineRepo}
+	meta := NewMetaData(metaAdapter)
 	r.Get("/meta-data", meta.NoCloudMetaDataHandler)
 	r.Get("/meta-data/", meta.MetaDataDirectoryHandler)
 	r.Get("/meta-data/{key}", meta.MetaDataKeyHandler)
