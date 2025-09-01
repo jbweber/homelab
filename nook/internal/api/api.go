@@ -20,6 +20,20 @@ type API struct {
 	ds *datastore.Datastore
 }
 
+// extractClientIP extracts the client IP from the request, preferring X-Forwarded-For header
+// over RemoteAddr. Returns an error if the IP cannot be parsed.
+func extractClientIP(r *http.Request) (string, error) {
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip == "" {
+		var err error
+		ip, _, err = net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			return "", fmt.Errorf("unable to parse remote address: %w", err)
+		}
+	}
+	return ip, nil
+}
+
 // updateMachineHandler handles PATCH /api/v0/machines/{id}.
 //
 // Request: JSON body with fields "name", "hostname", "ipv4".
@@ -117,16 +131,12 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 
 // instanceIdentityDocumentHandler serves EC2-compatible instance identity document
 func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract requestor IP, prefer X-Forwarded-For if present
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			fmt.Printf("[ERROR] unable to parse remote address: %v\n", err)
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	// Extract requestor IP
+	ip, err := extractClientIP(r)
+	if err != nil {
+		fmt.Printf("[ERROR] %v\n", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	// Lookup machine by IPv4

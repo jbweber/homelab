@@ -3,7 +3,6 @@ package api
 import (
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -28,14 +27,10 @@ func NewMetaData(store MetaDataStore) *MetaData {
 
 // NoCloudMetaDataHandler serves NoCloud-compatible metadata based on requestor IP (refactored for MetaData).
 func (m *MetaData) NoCloudMetaDataHandler(w http.ResponseWriter, r *http.Request) {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	ip, err := extractClientIP(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	machine, err := m.store.GetMachineByIPv4(ip)
@@ -84,14 +79,10 @@ func (m *MetaData) MetaDataDirectoryHandler(w http.ResponseWriter, r *http.Reque
 // MetaDataKeyHandler serves individual metadata keys for /meta-data/{key} (refactored for MetaData).
 func (m *MetaData) MetaDataKeyHandler(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	ip, err := extractClientIP(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	machine, err := m.store.GetMachineByIPv4(ip)

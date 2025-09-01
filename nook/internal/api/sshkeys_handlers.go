@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"strconv"
 
@@ -22,14 +21,10 @@ type SSHKeysStore interface {
 
 // PublicKeysHandler handles /2021-01-03/meta-data/public-keys
 func (s *SSHKeys) PublicKeysHandler(w http.ResponseWriter, r *http.Request) {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	ip, err := extractClientIP(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	machine, err := s.store.GetMachineByIPv4(ip)
 	if err != nil {
@@ -61,14 +56,10 @@ func (s *SSHKeys) PublicKeyByIdxHandler(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "invalid key index", http.StatusBadRequest)
 		return
 	}
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	ip, err := extractClientIP(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	machine, err := s.store.GetMachineByIPv4(ip)
 	if err != nil {
@@ -102,14 +93,10 @@ func (s *SSHKeys) PublicKeyOpenSSHHandler(w http.ResponseWriter, r *http.Request
 		http.Error(w, "invalid key index", http.StatusBadRequest)
 		return
 	}
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
+	ip, err := extractClientIP(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	machine, err := s.store.GetMachineByIPv4(ip)
 	if err != nil {
