@@ -73,6 +73,65 @@ func GetInitialMigrations() []Migration {
 				return err
 			},
 		},
+		{
+			Version: 2,
+			Name:    "create_networks_table",
+			Up: func(db *sql.DB) error {
+				// Create networks table
+				_, err := db.Exec(`
+					CREATE TABLE networks (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						name TEXT NOT NULL UNIQUE,
+						bridge TEXT NOT NULL,
+						subnet TEXT NOT NULL,
+						gateway TEXT,
+						dns_servers TEXT,
+						description TEXT,
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+					)
+				`)
+				if err != nil {
+					return err
+				}
+
+				// Create dhcp_ranges table
+				_, err = db.Exec(`
+					CREATE TABLE dhcp_ranges (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						network_id INTEGER NOT NULL,
+						start_ip TEXT NOT NULL,
+						end_ip TEXT NOT NULL,
+						lease_time TEXT DEFAULT '24h',
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						FOREIGN KEY (network_id) REFERENCES networks(id) ON DELETE CASCADE
+					)
+				`)
+				if err != nil {
+					return err
+				}
+
+				// Create indexes
+				_, err = db.Exec(`CREATE INDEX idx_dhcp_ranges_network_id ON dhcp_ranges(network_id)`)
+				if err != nil {
+					return err
+				}
+
+				_, err = db.Exec(`CREATE INDEX idx_networks_bridge ON networks(bridge)`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				// Drop tables in reverse order due to foreign key constraints
+				_, err := db.Exec(`DROP TABLE IF EXISTS dhcp_ranges`)
+				if err != nil {
+					return err
+				}
+
+				_, err = db.Exec(`DROP TABLE IF EXISTS networks`)
+				return err
+			},
+		},
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jbweber/homelab/nook/internal/migrations"
 	_ "modernc.org/sqlite"
 )
 
@@ -56,6 +57,23 @@ func SetupTestDB(t *testing.T, testName string) (*sql.DB, func()) {
 		if cleanupErr := CleanupTestDB(dsn); cleanupErr != nil {
 			t.Logf("Warning: failed to cleanup test database: %v", cleanupErr)
 		}
+	}
+
+	return db, cleanup
+}
+
+// SetupTestDBWithMigrations creates and returns a test database connection with migrations run
+func SetupTestDBWithMigrations(t *testing.T, testName string) (*sql.DB, func()) {
+	db, cleanup := SetupTestDB(t, testName)
+
+	// Run migrations
+	migrator := migrations.NewMigrator(db)
+	for _, migration := range migrations.GetInitialMigrations() {
+		migrator.AddMigration(migration)
+	}
+
+	if err := migrator.RunMigrations(); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	return db, cleanup

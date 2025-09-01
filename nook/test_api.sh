@@ -93,73 +93,134 @@ curl -s -X POST http://localhost:8081/api/v0/machines \
   -d "{\"name\": \"web-server\", \"hostname\": \"web-host\", \"ipv4\": \"192.168.1.101\"}"
 echo -e "\n"
 
-# Test 12: Metadata endpoints
-echo "12. GET /meta-data (should return metadata for test-host)"
+# Network endpoint tests
+echo "22. GET /api/v0/networks (empty list)"
+curl -s -X GET http://localhost:8081/api/v0/networks
+echo -e "\n"
+
+echo "23. POST /api/v0/networks (create network)"
+NETWORK_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/networks \
+  -H "Content-Type: application/json" \
+  -d '{"name": "br0", "bridge": "br0", "subnet": "192.168.1.0/24", "gateway": "192.168.1.1", "dns_servers": "8.8.8.8,1.1.1.1", "description": "Main network bridge"}')
+echo $NETWORK_RESPONSE
+
+# Extract network ID from response
+NETWORK_ID=$(echo $NETWORK_RESPONSE | grep -o '"ID":[0-9]*' | cut -d':' -f2)
+echo -e "\nCreated network with ID: $NETWORK_ID\n"
+
+echo "24. GET /api/v0/networks (should have one network)"
+curl -s -X GET http://localhost:8081/api/v0/networks
+echo -e "\n"
+
+echo "25. GET /api/v0/networks/$NETWORK_ID"
+curl -s -X GET http://localhost:8081/api/v0/networks/$NETWORK_ID
+echo -e "\n"
+
+echo "26. PATCH /api/v0/networks/$NETWORK_ID (update network)"
+curl -s -X PATCH http://localhost:8081/api/v0/networks/$NETWORK_ID \
+  -H "Content-Type: application/json" \
+  -d '{"name": "br0", "bridge": "br0", "subnet": "192.168.1.0/24", "gateway": "192.168.1.1", "dns_servers": "8.8.8.8,1.1.1.1", "description": "Updated main network bridge"}'
+echo -e "\n"
+
+echo "27. POST /api/v0/networks/$NETWORK_ID/dhcp (create DHCP range)"
+DHCP_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/networks/$NETWORK_ID/dhcp \
+  -H "Content-Type: application/json" \
+  -d '{"StartIP": "192.168.1.100", "EndIP": "192.168.1.200", "LeaseTime": "12h"}')
+echo $DHCP_RESPONSE
+
+# Extract DHCP range ID from response
+DHCP_ID=$(echo $DHCP_RESPONSE | grep -o '"ID":[0-9]*' | cut -d':' -f2)
+echo -e "\nCreated DHCP range with ID: $DHCP_ID\n"
+
+echo "28. GET /api/v0/networks/$NETWORK_ID/dhcp (list DHCP ranges)"
+curl -s -X GET http://localhost:8081/api/v0/networks/$NETWORK_ID/dhcp
+echo -e "\n"
+
+echo "29. DELETE /api/v0/networks/dhcp/$DHCP_ID (delete DHCP range)"
+curl -s -X DELETE http://localhost:8081/api/v0/networks/dhcp/$DHCP_ID
+echo -e "
+"
+echo -e "\n"
+
+echo "30. GET /api/v0/networks/$NETWORK_ID/dhcp (should be empty)"
+curl -s -X GET http://localhost:8081/api/v0/networks/$NETWORK_ID/dhcp
+echo -e "\n"
+
+# Test 31: Metadata endpoints
+echo "31. GET /meta-data (should return metadata for test-host)"
 curl -s -X GET http://localhost:8081/meta-data --header "X-Forwarded-For: $CLIENT_IP"
 echo -e "\n"
 
-echo "13. GET /user-data"
+echo "32. GET /user-data"
 curl -s -X GET http://localhost:8081/user-data
 echo -e "\n"
 
-echo "14. GET /vendor-data"
+echo "33. GET /vendor-data"
 curl -s -X GET http://localhost:8081/vendor-data
 echo -e "\n"
 
-echo "15. GET /network-config"
+echo "34. GET /network-config"
 curl -s -X GET http://localhost:8081/network-config
 echo -e "\n"
 
-# Test 8: List all machines
-echo "8. GET /api/v0/machines (should have two machines)"
+# Test 35: List all machines
+echo "35. GET /api/v0/machines (should have two machines)"
 curl -s -X GET http://localhost:8081/api/v0/machines
 echo -e "\n"
 
-# Test 9: Delete a machine
-echo "9. DELETE /api/v0/machines/$MACHINE_ID"
+# Test 36: Delete a machine
+echo "36. DELETE /api/v0/machines/$MACHINE_ID"
 curl -s -X DELETE http://localhost:8081/api/v0/machines/$MACHINE_ID
 echo -e "\n"
 
-# Test 10: List machines after deletion
-echo "10. GET /api/v0/machines (should have one machine left)"
+# Test 37: List machines after deletion
+echo "37. GET /api/v0/machines (should have one machine left)"
 curl -s -X GET http://localhost:8081/api/v0/machines
 echo -e "\n"
 
 
-# Test 16: Create machine with invalid IPv4
-echo "16. POST /api/v0/machines (invalid IPv4)"
+# Test 38: Create machine with invalid IPv4
+echo "38. POST /api/v0/machines (invalid IPv4)"
 curl -s -X POST http://localhost:8081/api/v0/machines \
   -H "Content-Type: application/json" \
   -d '{"name": "bad-ip", "hostname": "bad-host", "ipv4": "not-an-ip"}'
 echo -e "\n"
 
-# Test 17: Create machine with duplicate IPv4
-echo "17. POST /api/v0/machines (duplicate IPv4)"
+# Test 39: Create machine with duplicate IPv4
+echo "39. POST /api/v0/machines (duplicate IPv4)"
 curl -s -X POST http://localhost:8081/api/v0/machines \
   -H "Content-Type: application/json" \
   -d "{\"name\": \"dup-server\", \"hostname\": \"dup-host\", \"ipv4\": \"$CLIENT_IP\"}"
 echo -e "\n"
 
-# Test 18: Create machine with missing fields
-echo "18. POST /api/v0/machines (missing fields)"
+# Test 40: Create machine with missing fields
+echo "40. POST /api/v0/machines (missing fields)"
 curl -s -X POST http://localhost:8081/api/v0/machines \
   -H "Content-Type: application/json" \
   -d '{"name": "", "hostname": "", "ipv4": ""}'
 echo -e "\n"
 
-# Test 19: GET /meta-data for non-existent IP
-echo "19. GET /meta-data (non-existent IP)"
+# Test 41: GET /meta-data for non-existent IP
+echo "41. GET /meta-data (non-existent IP)"
 curl -s -X GET http://localhost:8081/meta-data --header "X-Forwarded-For: 203.0.113.99"
 echo -e "\n"
 
-# Test 20: GET /api/v0/machines/99999 (invalid ID)"
-echo "20. GET /api/v0/machines/99999 (invalid ID)"
+# Test 42: GET /api/v0/machines/99999 (invalid ID)"
+echo "42. GET /api/v0/machines/99999 (invalid ID)"
 curl -s -X GET http://localhost:8081/api/v0/machines/99999
 echo -e "\n"
 
-# Test 21: DELETE /api/v0/machines/99999 (invalid ID)"
-echo "21. DELETE /api/v0/machines/99999 (invalid ID)"
+# Test 43: DELETE /api/v0/machines/99999 (invalid ID)"
+echo "43. DELETE /api/v0/machines/99999 (invalid ID)"
 curl -s -X DELETE http://localhost:8081/api/v0/machines/99999
+echo -e "\n"
+
+echo "44. DELETE /api/v0/networks/$NETWORK_ID (delete network)"
+curl -s -X DELETE http://localhost:8081/api/v0/networks/$NETWORK_ID
+echo -e "\n"
+
+echo "45. GET /api/v0/networks (should be empty)"
+curl -s -X GET http://localhost:8081/api/v0/networks
 echo -e "\n"
 
 echo "API testing complete!"

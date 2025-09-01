@@ -24,8 +24,6 @@ COVERAGE_THRESHOLD=50
 .PHONY: build
 build:
 	$(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PACKAGE)
-	mkdir -p ~/nook/bin
-	cp $(BINARY_NAME) ~/nook/bin/
 
 # Build for Linux
 .PHONY: build-linux

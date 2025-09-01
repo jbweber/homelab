@@ -19,8 +19,10 @@ import (
 
 // API holds repository dependencies for clean data access
 type API struct {
-	machineRepo repository.MachineRepository
-	sshKeyRepo  repository.SSHKeyRepository
+	machineRepo   repository.MachineRepository
+	sshKeyRepo    repository.SSHKeyRepository
+	networkRepo   repository.NetworkRepository
+	dhcpRangeRepo repository.DHCPRangeRepository
 }
 
 // machineStoreAdapter adapts MachinesStore interface
@@ -122,6 +124,48 @@ func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	}, nil
 }
 
+// networkStoreAdapter adapts NetworkRepository to NetworksStore interface
+type networkStoreAdapter struct {
+	networkRepo   repository.NetworkRepository
+	dhcpRangeRepo repository.DHCPRangeRepository
+}
+
+func (a *networkStoreAdapter) CreateNetwork(network domain.Network) (domain.Network, error) {
+	return a.networkRepo.Save(context.Background(), network)
+}
+
+func (a *networkStoreAdapter) GetNetwork(id int64) (domain.Network, error) {
+	return a.networkRepo.FindByID(context.Background(), id)
+}
+
+func (a *networkStoreAdapter) GetNetworkByName(name string) (domain.Network, error) {
+	return a.networkRepo.FindByName(context.Background(), name)
+}
+
+func (a *networkStoreAdapter) ListNetworks() ([]domain.Network, error) {
+	return a.networkRepo.FindAll(context.Background())
+}
+
+func (a *networkStoreAdapter) UpdateNetwork(network domain.Network) (domain.Network, error) {
+	return a.networkRepo.Save(context.Background(), network)
+}
+
+func (a *networkStoreAdapter) DeleteNetwork(id int64) error {
+	return a.networkRepo.DeleteByID(context.Background(), id)
+}
+
+func (a *networkStoreAdapter) GetDHCPRanges(networkID int64) ([]domain.DHCPRange, error) {
+	return a.networkRepo.GetDHCPRanges(context.Background(), networkID)
+}
+
+func (a *networkStoreAdapter) CreateDHCPRange(dhcpRange domain.DHCPRange) (domain.DHCPRange, error) {
+	return a.dhcpRangeRepo.Save(context.Background(), dhcpRange)
+}
+
+func (a *networkStoreAdapter) DeleteDHCPRange(id int64) error {
+	return a.dhcpRangeRepo.DeleteByID(context.Background(), id)
+}
+
 // sshKeysStoreAdapter adapts repositories to SSHKeysStore interface
 type sshKeysStoreAdapter struct {
 	sshKeyRepo  repository.SSHKeyRepository
@@ -177,21 +221,6 @@ func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SS
 
 func (a *sshKeysStoreAdapter) DeleteSSHKey(id int64) error {
 	return a.sshKeyRepo.DeleteByID(context.Background(), id)
-}
-
-// simpleNetworksStore is a simple implementation of NetworksStore
-type simpleNetworksStore struct{}
-
-func (s *simpleNetworksStore) CreateNetwork(name string) error {
-	// For now, just log the network creation
-	log.Printf("Network created: %s", name)
-	return nil
-}
-
-func (s *simpleNetworksStore) DeleteNetwork(name string) error {
-	// For now, just log the network deletion
-	log.Printf("Network deleted: %s", name)
-	return nil
 }
 
 // metaDataStoreAdapter adapts MachineRepository to MetaDataStore interface
@@ -328,8 +357,10 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 // NewAPI creates a new API instance with repositories initialized from the datastore
 func NewAPI(db *sql.DB) *API {
 	return &API{
-		machineRepo: repository.NewMachineRepository(db),
-		sshKeyRepo:  repository.NewSSHKeyRepository(db),
+		machineRepo:   repository.NewMachineRepository(db),
+		sshKeyRepo:    repository.NewSSHKeyRepository(db),
+		networkRepo:   repository.NewNetworkRepository(db),
+		dhcpRangeRepo: repository.NewDHCPRangeRepository(db),
 	}
 }
 
@@ -357,11 +388,20 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// Networks endpoints group
-	networks := NewNetworks(&simpleNetworksStore{})
+	networkAdapter := &networkStoreAdapter{
+		networkRepo:   a.networkRepo,
+		dhcpRangeRepo: a.dhcpRangeRepo,
+	}
+	networks := NewNetworks(networkAdapter)
 	r.Route("/api/v0/networks", func(r chi.Router) {
 		r.Get("/", networks.NetworksHandler)
 		r.Post("/", networks.CreateNetworkHandler)
-		r.Delete("/{name}", networks.DeleteNetworkHandler)
+		r.Get("/{id}", networks.GetNetworkHandler)
+		r.Patch("/{id}", networks.UpdateNetworkHandler)
+		r.Delete("/{id}", networks.DeleteNetworkHandler)
+		r.Get("/{id}/dhcp", networks.GetNetworkDHCPRangesHandler)
+		r.Post("/{id}/dhcp", networks.CreateDHCPRangeHandler)
+		r.Delete("/dhcp/{rangeId}", networks.DeleteDHCPRangeHandler)
 	})
 
 	// SSH keys endpoints group - registered by the SSH keys module

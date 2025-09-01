@@ -544,7 +544,8 @@ func TestNetworksHandler_Placeholder(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "[networks endpoint placeholder]", w.Body.String())
+	// Should return empty array for no networks
+	assert.Equal(t, "null\n", w.Body.String())
 }
 
 func TestUpdateMachineHandler_Success(t *testing.T) {

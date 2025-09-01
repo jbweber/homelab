@@ -2,9 +2,9 @@ package migrations
 
 import (
 	"database/sql"
+	"fmt"
 	"testing"
 
-	"github.com/jbweber/homelab/nook/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
@@ -12,7 +12,8 @@ import (
 
 func TestMigrator_RunMigrations(t *testing.T) {
 	// Create a test database
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMigrator_RunMigrations"))
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", "TestMigrator_RunMigrations")
+	db, err := sql.Open("sqlite", dsn)
 	require.NoError(t, err)
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {
@@ -35,7 +36,7 @@ func TestMigrator_RunMigrations(t *testing.T) {
 	// Verify current version
 	version, err := migrator.GetCurrentVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1), version)
+	assert.Equal(t, int64(2), version)
 
 	// Verify tables exist
 	var count int
@@ -47,19 +48,28 @@ func TestMigrator_RunMigrations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='networks'").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='dhcp_ranges'").Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
 	// Verify schema_migrations table exists
 	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='schema_migrations'").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 
 	// Verify migration was recorded
-	err = db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = 1 AND name = 'create_initial_tables'").Scan(&count)
+	err = db.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = 2 AND name = 'create_networks_table'").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
 }
 
 func TestMigrator_AddMigration(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMigrator_AddMigration"))
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", "TestMigrator_AddMigration")
+	db, err := sql.Open("sqlite", dsn)
 	require.NoError(t, err)
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {
@@ -83,7 +93,8 @@ func TestMigrator_AddMigration(t *testing.T) {
 
 func TestUpgradeExistingTables(t *testing.T) {
 	// Create a test database with old schema
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestUpgradeExistingTables"))
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", "TestUpgradeExistingTables")
+	db, err := sql.Open("sqlite", dsn)
 	require.NoError(t, err)
 	defer func() {
 		if closeErr := db.Close(); closeErr != nil {

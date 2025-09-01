@@ -14,3 +14,23 @@ type SSHKey struct {
 	MachineID int64  // Foreign key to Machine
 	KeyText   string // Public SSH key text
 }
+
+// Network represents a network configuration on a hypervisor
+type Network struct {
+	ID          int64  // Unique identifier
+	Name        string // Network name (e.g., "br0", "internal")
+	Bridge      string // Bridge interface name (e.g., "br0")
+	Subnet      string // Subnet in CIDR notation (e.g., "192.168.1.0/24")
+	Gateway     string // Gateway IP address
+	DNSServers  string // Comma-separated DNS server IPs
+	Description string // Optional description
+}
+
+// DHCPRange represents a DHCP range within a network
+type DHCPRange struct {
+	ID        int64  // Unique identifier
+	NetworkID int64  // Foreign key to Network
+	StartIP   string // Start of DHCP range
+	EndIP     string // End of DHCP range
+	LeaseTime string // DHCP lease time (e.g., "12h", "24h")
+}
