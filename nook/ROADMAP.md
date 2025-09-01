@@ -13,23 +13,35 @@ This file tracks the current development priorities and future plans for the Noo
 - [x] Test machine CRUD operations via API
 - [x] Document architecture and design decisions
 - [x] Implement repository pattern with clean interfaces
+- [x] Add server subcommand with configurable database and port
+- [x] Implement systemd user service for production deployment
+- [x] Enhance integration testing with automatic cleanup
+- [x] Streamline API to focus on nocloud compatibility
+- [x] Remove unused EC2-style endpoints (public-keys, instance-identity)
+- [x] Remove unused networks endpoints and handlers
+- [x] Complete SSH key endpoint testing
+- [x] Complete cloud-init metadata endpoint testing
+- [x] Add comprehensive error handling and validation
 
 ## Current Status (September 2025)
-- ✅ **Server runs successfully** on port 8080
+- ✅ **Production deployment ready** with systemd user service
+- ✅ **Server runs successfully** on port 8080 with configurable options
 - ✅ **Machine CRUD operations tested** and working
+- ✅ **SSH key management fully tested** with comprehensive coverage
+- ✅ **Cloud-init metadata endpoints tested** with IP-based lookup
 - ✅ **Database migrations** and schema management working
 - ✅ **Cascade deletion** implemented and tested
-- ✅ **CLI framework** established with subcommands
+- ✅ **CLI framework** established with server subcommand
 - ✅ **Error handling** consistent across all endpoints
-- ✅ **Documentation** updated to reflect current state
+- ✅ **Integration testing** with automatic server lifecycle management
+- ✅ **Documentation** updated to reflect current streamlined architecture
 
 ## Next Steps (Immediate Priority)
-- [ ] Complete SSH key endpoint testing
-- [ ] Complete network endpoint testing
-- [ ] Test cloud-init metadata endpoints
 - [ ] Test CLI commands end-to-end
-- [ ] Verify cascade deletion behavior
+- [ ] Verify cascade deletion behavior in integration tests
 - [ ] Add integration tests for CLI operations
+- [ ] Add security and access control (tokens, logging, etc.)
+- [ ] Improve error handling and validation for edge cases
 
 ## Future Enhancements
 - [ ] Improve error handling and validation
