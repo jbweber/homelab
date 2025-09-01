@@ -94,6 +94,11 @@ deps:
 	$(GOMOD) download
 	$(GOMOD) tidy
 
+# Go mod tidy
+.PHONY: go-mod-tidy
+go-mod-tidy:
+	$(GOMOD) tidy
+
 
 # Format code (go fmt + goimports)
 .PHONY: fmt
@@ -137,7 +142,7 @@ dev-setup: deps
 
 # CI pipeline simulation
 .PHONY: ci
-ci: check-fmt vet test-race test-coverage-validate
+ci: go-mod-tidy check-fmt vet test-race test-coverage-validate
 	@echo "✅ CI pipeline completed successfully!"
 
 
@@ -166,6 +171,7 @@ help:
 	@echo "  clean                 - Clean build artifacts"
 	@echo "  run                   - Run the application"
 	@echo "  deps                  - Download and tidy dependencies"
+	@echo "  go-mod-tidy           - Run go mod tidy"
 	@echo "  fmt                   - Format code (go fmt + goimports)"
 	@echo "  vet                   - Vet code"
 	@echo "  lint                  - Lint code (requires golangci-lint)"

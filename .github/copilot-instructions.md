@@ -49,11 +49,6 @@ This service will let us provide the minimal endpoints needed for managing metad
 
 #### API Endpoints
 
-* /2021-01-03/dynamic/instance-identity/document
-* /2021-01-03/meta-data/public-keys
-* /2021-01-03/meta-data/public-keys/<int:idx>
-* /2021-01-03/meta-data/public-keys/<int:idx>/openssh-key
-* /latest/api/token
 * /meta-data
 * /user-data
 * /vendor-data
