@@ -282,3 +282,86 @@ func TestDeleteSSHKey(t *testing.T) {
 	err = ds.DeleteSSHKey(99999)
 	assert.NoError(t, err)
 }
+
+func TestUpdateMachine(t *testing.T) {
+	ds, err := New(testutil.NewTestDSN("TestUpdateMachine"))
+	require.NoError(t, err)
+
+	// Create a machine first
+	machine := Machine{
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.168.1.100",
+	}
+	created, err := ds.CreateMachine(machine)
+	require.NoError(t, err)
+
+	// Update the machine
+	updated := Machine{
+		ID:       created.ID,
+		Name:     "updated-machine",
+		Hostname: "updated-host",
+		IPv4:     "192.168.1.101",
+	}
+	result, err := ds.UpdateMachine(updated)
+	require.NoError(t, err)
+	assert.Equal(t, updated.Name, result.Name)
+	assert.Equal(t, updated.Hostname, result.Hostname)
+	assert.Equal(t, updated.IPv4, result.IPv4)
+
+	// Verify the update in database
+	retrieved, err := ds.GetMachine(created.ID)
+	require.NoError(t, err)
+	assert.Equal(t, updated.Name, retrieved.Name)
+	assert.Equal(t, updated.Hostname, retrieved.Hostname)
+	assert.Equal(t, updated.IPv4, retrieved.IPv4)
+
+	// Test validation: missing ID
+	invalid := Machine{Name: "no-id", Hostname: "host", IPv4: "192.168.1.102"}
+	_, err = ds.UpdateMachine(invalid)
+	assert.Error(t, err)
+
+	// Test validation: missing name
+	invalid = Machine{ID: created.ID, Hostname: "host", IPv4: "192.168.1.102"}
+	_, err = ds.UpdateMachine(invalid)
+	assert.Error(t, err)
+}
+
+func TestListAllSSHKeys(t *testing.T) {
+	ds, err := New(testutil.NewTestDSN("TestListAllSSHKeys"))
+	require.NoError(t, err)
+
+	// Create a machine first
+	machine := Machine{
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.168.1.100",
+	}
+	created, err := ds.CreateMachine(machine)
+	require.NoError(t, err)
+
+	// Initially should be empty
+	keys, err := ds.ListAllSSHKeys()
+	require.NoError(t, err)
+	assert.Empty(t, keys)
+
+	// Create some SSH keys
+	key1 := "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCkey1"
+	key2 := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIkey2"
+
+	_, err = ds.CreateSSHKey(created.ID, key1)
+	require.NoError(t, err)
+	_, err = ds.CreateSSHKey(created.ID, key2)
+	require.NoError(t, err)
+
+	// List all SSH keys
+	keys, err = ds.ListAllSSHKeys()
+	require.NoError(t, err)
+	assert.Len(t, keys, 2)
+
+	// Verify the keys are returned in order
+	assert.Equal(t, key1, keys[0].KeyText)
+	assert.Equal(t, key2, keys[1].KeyText)
+	assert.Equal(t, created.ID, keys[0].MachineID)
+	assert.Equal(t, created.ID, keys[1].MachineID)
+}
