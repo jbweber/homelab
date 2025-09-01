@@ -40,8 +40,12 @@ func SetupTestDB(t *testing.T, testName string) (*sql.DB, func()) {
 	}
 
 	cleanup := func() {
-		db.Close()
-		CleanupTestDB(dsn)
+		if closeErr := db.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close test database: %v", closeErr)
+		}
+		if cleanupErr := CleanupTestDB(dsn); cleanupErr != nil {
+			t.Logf("Warning: failed to cleanup test database: %v", cleanupErr)
+		}
 	}
 
 	return db, cleanup

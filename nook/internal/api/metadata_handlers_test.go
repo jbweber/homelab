@@ -30,7 +30,11 @@ func TestNoCloudMetaDataHandler_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	meta.NoCloudMetaDataHandler(w, req)
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -210,7 +214,11 @@ func TestMetaDataKeyHandler_Success_ContentType(t *testing.T) {
 	w := httptest.NewRecorder()
 	meta.MetaDataKeyHandler(w, req)
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)
@@ -239,7 +247,11 @@ func TestMetaDataDirectoryHandler_Success(t *testing.T) {
 	w := httptest.NewRecorder()
 	meta.MetaDataDirectoryHandler(w, req)
 	resp := w.Result()
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("expected 200, got %d", resp.StatusCode)

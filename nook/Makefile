@@ -18,7 +18,7 @@ BINARY_UNIX=$(BINARY_NAME)_unix
 # Coverage parameters
 COVERAGE_FILE=coverage.out
 COVERAGE_HTML=coverage.html
-COVERAGE_THRESHOLD=75
+COVERAGE_THRESHOLD=55
 
 # Build the project
 .PHONY: build

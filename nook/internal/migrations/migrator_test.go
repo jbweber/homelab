@@ -14,7 +14,11 @@ func TestMigrator_RunMigrations(t *testing.T) {
 	// Create a test database
 	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMigrator_RunMigrations"))
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close test database: %v", closeErr)
+		}
+	}()
 
 	// Create migrator
 	migrator := NewMigrator(db)
@@ -57,7 +61,11 @@ func TestMigrator_RunMigrations(t *testing.T) {
 func TestMigrator_AddMigration(t *testing.T) {
 	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMigrator_AddMigration"))
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close test database: %v", closeErr)
+		}
+	}()
 
 	migrator := NewMigrator(db)
 
@@ -77,7 +85,11 @@ func TestUpgradeExistingTables(t *testing.T) {
 	// Create a test database with old schema
 	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestUpgradeExistingTables"))
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if closeErr := db.Close(); closeErr != nil {
+			t.Logf("Warning: failed to close test database: %v", closeErr)
+		}
+	}()
 
 	// Create old schema (without created_at/updated_at columns)
 	_, err = db.Exec(`

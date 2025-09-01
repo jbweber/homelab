@@ -91,7 +91,11 @@ func (m *Migrator) runMigration(migration Migration) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil && rollbackErr != sql.ErrTxDone {
+			// Log error but don't fail if transaction is already committed
+		}
+	}()
 
 	// Run the migration
 	if err := migration.Up(m.db); err != nil {

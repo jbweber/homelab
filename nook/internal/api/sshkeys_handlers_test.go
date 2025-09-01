@@ -45,68 +45,19 @@ func (m *mockSSHKeysStore) ListSSHKeys(machineID int64) ([]SSHKey, error) {
 	return []SSHKey{}, nil
 }
 
+func (m *mockSSHKeysStore) CreateSSHKey(machineID int64, keyText string) (*SSHKey, error) {
+	return &SSHKey{ID: 1, MachineID: machineID, KeyText: keyText}, nil
+}
+
+func (m *mockSSHKeysStore) DeleteSSHKey(id int64) error {
+	return nil
+}
+
 // setupSSHKeysTestRouter creates a test router with only SSH keys routes registered
 func setupSSHKeysTestRouter(t *testing.T, store SSHKeysStore) *chi.Mux {
 	r := chi.NewRouter()
 	RegisterSSHKeysRoutes(r, store)
 	return r
-}
-
-// testSSHKeysStoreAdapter adapts repositories to SSHKeysStore interface for testing
-type testSSHKeysStoreAdapter struct {
-	machineRepo repository.MachineRepository
-	sshKeyRepo  repository.SSHKeyRepository
-}
-
-func (a *testSSHKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
-	ctx := context.Background()
-	keys, err := a.sshKeyRepo.FindAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]SSHKey, len(keys))
-	for i, key := range keys {
-		result[i] = SSHKey{
-			ID:        key.ID,
-			MachineID: key.MachineID,
-			KeyText:   key.KeyText,
-		}
-	}
-	return result, nil
-}
-
-func (a *testSSHKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) {
-	ctx := context.Background()
-	machine, err := a.machineRepo.FindByIPv4(ctx, ip)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Machine{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
-	}, nil
-}
-
-func (a *testSSHKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error) {
-	ctx := context.Background()
-	keys, err := a.sshKeyRepo.FindByMachineID(ctx, machineID)
-	if err != nil {
-		return nil, err
-	}
-
-	result := make([]SSHKey, len(keys))
-	for i, key := range keys {
-		result[i] = SSHKey{
-			ID:        key.ID,
-			MachineID: key.MachineID,
-			KeyText:   key.KeyText,
-		}
-	}
-	return result, nil
 }
 
 // setupSSHKeysTestAPI creates a test router with full API but focused on SSH keys testing

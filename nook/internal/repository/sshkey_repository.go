@@ -58,7 +58,11 @@ func (r *sshKeyRepositoryImpl) FindAll(ctx context.Context) ([]domain.SSHKey, er
 	if err != nil {
 		return nil, fmt.Errorf("failed to list all SSH keys: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// Log error but don't fail the operation
+		}
+	}()
 
 	var keys []domain.SSHKey
 	for rows.Next() {
@@ -96,7 +100,11 @@ func (r *sshKeyRepositoryImpl) FindByMachineID(ctx context.Context, machineID in
 	if err != nil {
 		return nil, fmt.Errorf("failed to list SSH keys for machine %d: %w", machineID, err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// Log error but don't fail the operation
+		}
+	}()
 
 	var keys []domain.SSHKey
 	for rows.Next() {

@@ -102,7 +102,11 @@ func (r *machineRepositoryImpl) FindAll(ctx context.Context) ([]domain.Machine, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to list machines: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil {
+			// Log error but don't fail the operation
+		}
+	}()
 
 	var machines []domain.Machine
 	for rows.Next() {

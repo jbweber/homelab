@@ -52,9 +52,15 @@ func main() {
 	addMachineCmd.Flags().String("name", "", "Machine name (required)")
 	addMachineCmd.Flags().String("hostname", "", "Machine hostname (required)")
 	addMachineCmd.Flags().String("ipv4", "", "Machine IPv4 address (required)")
-	addMachineCmd.MarkFlagRequired("name")
-	addMachineCmd.MarkFlagRequired("hostname")
-	addMachineCmd.MarkFlagRequired("ipv4")
+	if err := addMachineCmd.MarkFlagRequired("name"); err != nil {
+		log.Fatal(err)
+	}
+	if err := addMachineCmd.MarkFlagRequired("hostname"); err != nil {
+		log.Fatal(err)
+	}
+	if err := addMachineCmd.MarkFlagRequired("ipv4"); err != nil {
+		log.Fatal(err)
+	}
 
 	var addNetworkCmd = &cobra.Command{
 		Use:   "network",
@@ -65,7 +71,9 @@ func main() {
 		},
 	}
 	addNetworkCmd.Flags().String("name", "", "Network name (required)")
-	addNetworkCmd.MarkFlagRequired("name")
+	if err := addNetworkCmd.MarkFlagRequired("name"); err != nil {
+		log.Fatal(err)
+	}
 
 	var addSSHKeyCmd = &cobra.Command{
 		Use:   "ssh-key",
@@ -78,8 +86,12 @@ func main() {
 	}
 	addSSHKeyCmd.Flags().Int64("machine-id", 0, "Machine ID (required)")
 	addSSHKeyCmd.Flags().String("key-text", "", "SSH key text (required)")
-	addSSHKeyCmd.MarkFlagRequired("machine-id")
-	addSSHKeyCmd.MarkFlagRequired("key-text")
+	if err := addSSHKeyCmd.MarkFlagRequired("machine-id"); err != nil {
+		log.Fatal(err)
+	}
+	if err := addSSHKeyCmd.MarkFlagRequired("key-text"); err != nil {
+		log.Fatal(err)
+	}
 
 	var deleteMachineCmd = &cobra.Command{
 		Use:   "machine",
@@ -90,7 +102,9 @@ func main() {
 		},
 	}
 	deleteMachineCmd.Flags().Int64("id", 0, "Machine ID (required)")
-	deleteMachineCmd.MarkFlagRequired("id")
+	if err := deleteMachineCmd.MarkFlagRequired("id"); err != nil {
+		log.Fatal(err)
+	}
 
 	var deleteNetworkCmd = &cobra.Command{
 		Use:   "network",
@@ -101,7 +115,9 @@ func main() {
 		},
 	}
 	deleteNetworkCmd.Flags().String("name", "", "Network name (required)")
-	deleteNetworkCmd.MarkFlagRequired("name")
+	if err := deleteNetworkCmd.MarkFlagRequired("name"); err != nil {
+		log.Fatal(err)
+	}
 
 	var deleteSSHKeyCmd = &cobra.Command{
 		Use:   "ssh-key",
@@ -112,7 +128,9 @@ func main() {
 		},
 	}
 	deleteSSHKeyCmd.Flags().Int64("id", 0, "SSH key ID (required)")
-	deleteSSHKeyCmd.MarkFlagRequired("id")
+	if err := deleteSSHKeyCmd.MarkFlagRequired("id"); err != nil {
+		log.Fatal(err)
+	}
 
 	addCmd.AddCommand(addMachineCmd)
 	addCmd.AddCommand(addNetworkCmd)
@@ -169,7 +187,11 @@ func addMachine(name, hostname, ipv4 string) {
 	if err != nil {
 		log.Fatalf("Failed to add machine: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusCreated {
 		log.Fatalf("Failed to add machine: %s", resp.Status)
 	}
@@ -185,7 +207,11 @@ func addNetwork(name string) {
 	if err != nil {
 		log.Fatalf("Failed to add network: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusCreated {
 		log.Fatalf("Failed to add network: %s", resp.Status)
 	}
@@ -202,7 +228,11 @@ func addSSHKey(machineID int64, keyText string) {
 	if err != nil {
 		log.Fatalf("Failed to add SSH key: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusCreated {
 		log.Fatalf("Failed to add SSH key: %s", resp.Status)
 	}
@@ -215,7 +245,11 @@ func deleteMachine(id int64) {
 	if err != nil {
 		log.Fatalf("Failed to delete machine: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusNoContent {
 		log.Fatalf("Failed to delete machine: %s", resp.Status)
 	}
@@ -228,7 +262,11 @@ func deleteNetwork(name string) {
 	if err != nil {
 		log.Fatalf("Failed to delete network: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusNoContent {
 		log.Fatalf("Failed to delete network: %s", resp.Status)
 	}
@@ -241,7 +279,11 @@ func deleteSSHKey(id int64) {
 	if err != nil {
 		log.Fatalf("Failed to delete SSH key: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			log.Printf("Warning: failed to close response body: %v", closeErr)
+		}
+	}()
 	if resp.StatusCode != http.StatusNoContent {
 		log.Fatalf("Failed to delete SSH key: %s", resp.Status)
 	}

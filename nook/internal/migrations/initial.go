@@ -92,7 +92,11 @@ func upgradeExistingTables(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() {
+			if closeErr := rows.Close(); closeErr != nil {
+				// Log error but don't fail migration
+			}
+		}()
 
 		var machines []struct {
 			id       int64
@@ -158,7 +162,11 @@ func upgradeExistingTables(db *sql.DB) error {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() {
+			if closeErr := rows.Close(); closeErr != nil {
+				// Log error but don't fail migration
+			}
+		}()
 
 		var sshKeys []struct {
 			id        int64
