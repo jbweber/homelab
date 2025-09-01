@@ -20,143 +20,6 @@ type API struct {
 	ds *datastore.Datastore
 }
 
-// publicKeyByIdxHandler serves a specific SSH public key by index for the requesting machine.
-// GET /2021-01-03/meta-data/public-keys/{idx}
-// Returns: text/plain, key line or error.
-func (a *API) publicKeyByIdxHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil || idx < 0 {
-		http.Error(w, "invalid key index", http.StatusBadRequest)
-		return
-	}
-
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
-	}
-
-	machine, err := a.ds.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-
-	keys, err := a.ds.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-	if idx >= len(keys) {
-		http.Error(w, "key index out of range", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
-		log.Printf("failed to write public key by idx: %v", err)
-	}
-}
-
-// publicKeyOpenSSHHandler serves the OpenSSH-formatted key for a specific index.
-// GET /2021-01-03/meta-data/public-keys/{idx}/openssh-key
-// Returns: text/plain, OpenSSH key or error.
-func (a *API) publicKeyOpenSSHHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil || idx < 0 {
-		http.Error(w, "invalid key index", http.StatusBadRequest)
-		return
-	}
-
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
-	}
-
-	machine, err := a.ds.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-
-	keys, err := a.ds.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-	if idx >= len(keys) {
-		http.Error(w, "key index out of range", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/plain")
-	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
-		log.Printf("failed to write public key OpenSSH: %v", err)
-	}
-}
-
-// publicKeysHandler serves a list of SSH public keys for the requesting machine (cloud-init format).
-//
-// GET /2021-01-03/meta-data/public-keys
-// Returns: text/plain, one key per line, or error.
-func (a *API) publicKeysHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract requestor IP, prefer X-Forwarded-For if present
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip == "" {
-		var err error
-		ip, _, err = net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			http.Error(w, "unable to parse remote address", http.StatusBadRequest)
-			return
-		}
-	}
-
-	// Lookup machine by IPv4
-	machine, err := a.ds.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-
-	// Fetch SSH keys for this machine
-	keys, err := a.ds.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-
-	// Format: one key per line (cloud-init expects this)
-	w.Header().Set("Content-Type", "text/plain")
-	for _, k := range keys {
-		if _, err := fmt.Fprintln(w, k.KeyText); err != nil {
-			log.Printf("failed to write public key: %v", err)
-		}
-	}
-}
-
 // updateMachineHandler handles PATCH /api/v0/machines/{id}.
 //
 // Request: JSON body with fields "name", "hostname", "ipv4".
@@ -342,12 +205,13 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// EC2-compatible and public-keys endpoints group
+	sshKeysMeta := NewSSHKeys(a.ds)
 	r.Route("/2021-01-03", func(r chi.Router) {
 		r.Get("/dynamic/instance-identity/document", a.instanceIdentityDocumentHandler)
 		r.Route("/meta-data/public-keys", func(r chi.Router) {
-			r.Get("/", a.publicKeysHandler)
-			r.Get("/{idx}", a.publicKeyByIdxHandler)
-			r.Get("/{idx}/openssh-key", a.publicKeyOpenSSHHandler)
+			r.Get("/", sshKeysMeta.PublicKeysHandler)
+			r.Get("/{idx}", sshKeysMeta.PublicKeyByIdxHandler)
+			r.Get("/{idx}/openssh-key", sshKeysMeta.PublicKeyOpenSSHHandler)
 		})
 	})
 }
@@ -389,41 +253,6 @@ ethernets:
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(networkConfig)); err != nil {
 		log.Printf("failed to write network config: %v", err)
-	}
-}
-
-func networksHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	if _, err := w.Write([]byte("[networks endpoint placeholder]")); err != nil {
-		log.Printf("failed to write networks endpoint placeholder: %v", err)
-	}
-}
-
-// sshKeysHandler serves a list of all SSH keys in the system as JSON.
-func (a *API) sshKeysHandler(w http.ResponseWriter, r *http.Request) {
-	keys, err := a.ds.ListAllSSHKeys()
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-
-	type SSHKeyResponse struct {
-		ID        int64  `json:"id"`
-		MachineID int64  `json:"machine_id"`
-		KeyText   string `json:"key_text"`
-	}
-	resp := make([]SSHKeyResponse, len(keys))
-	for i, k := range keys {
-		resp[i] = SSHKeyResponse{
-			ID:        k.ID,
-			MachineID: k.MachineID,
-			KeyText:   k.KeyText,
-		}
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp); err != nil {
-		log.Printf("failed to encode ssh keys response: %v", err)
 	}
 }
 
