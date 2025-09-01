@@ -162,3 +162,22 @@ func (s *SSHKeys) SSHKeysHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to encode ssh keys response: %v", err)
 	}
 }
+
+// RegisterSSHKeysRoutes registers all SSH key related routes on the provided router.
+// This function encapsulates all SSH key route registration logic, making it easier
+// to test and maintain SSH key functionality independently.
+func RegisterSSHKeysRoutes(r chi.Router, store SSHKeysStore) {
+	sshKeys := NewSSHKeys(store)
+
+	// API v0 SSH keys endpoints
+	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
+		r.Get("/", sshKeys.SSHKeysHandler)
+	})
+
+	// EC2-compatible public keys endpoints
+	r.Route("/2021-01-03/meta-data/public-keys", func(r chi.Router) {
+		r.Get("/", sshKeys.PublicKeysHandler)
+		r.Get("/{idx}", sshKeys.PublicKeyByIdxHandler)
+		r.Get("/{idx}/openssh-key", sshKeys.PublicKeyOpenSSHHandler)
+	})
+}

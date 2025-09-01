@@ -208,25 +208,14 @@ func (a *API) RegisterRoutes(r chi.Router) {
 		r.Get("/", networks.NetworksHandler)
 	})
 
-	// SSH keys endpoints group
-	sshKeys := NewSSHKeys(a.ds)
-	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
-		r.Get("/", sshKeys.SSHKeysHandler)
-	})
+	// SSH keys endpoints group - registered by the SSH keys module
+	RegisterSSHKeysRoutes(r, a.ds)
 
-	// EC2-compatible and public-keys endpoints group
-	sshKeysMeta := NewSSHKeys(a.ds)
+	// EC2-compatible endpoints group
 	r.Route("/2021-01-03", func(r chi.Router) {
 		r.Get("/dynamic/instance-identity/document", a.instanceIdentityDocumentHandler)
-		r.Route("/meta-data/public-keys", func(r chi.Router) {
-			r.Get("/", sshKeysMeta.PublicKeysHandler)
-			r.Get("/{idx}", sshKeysMeta.PublicKeyByIdxHandler)
-			r.Get("/{idx}/openssh-key", sshKeysMeta.PublicKeyOpenSSHHandler)
-		})
 	})
 }
-
-// noCloudUserDataHandler serves NoCloud-compatible user-data
 func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
 	// For now, serve a static cloud-init user-data script
 	fmt.Println("[DEBUG] noCloudUserDataHandler called")
