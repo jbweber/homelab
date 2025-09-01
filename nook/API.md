@@ -36,6 +36,7 @@ These endpoints are for managing the data behind the service. They do **not** pe
 - Cloud-init endpoints **must** use IP-based machine lookup for correct metadata delivery.
 - Unit tests expect `/api/v0/ssh-keys` to always return a 200 and a JSON array, even if empty.
 - Lint and coverage checks should be run for both endpoint groups.
+- **Coverage Status (August 2025):** 75.6% overall, with SSH key handlers at 95.5%+ coverage. Focus on error branches and edge cases in recent improvements.
 
 ---
 

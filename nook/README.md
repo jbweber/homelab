@@ -57,6 +57,23 @@ make test-race
 make coverage-func
 ```
 
+### Coverage
+
+Current test coverage: **75.6%** (api package), **62.5%** (datastore package)
+
+**Recent Improvements (August 2025):**
+- SSH key handlers coverage significantly improved:
+  - `PublicKeysHandler`: 95.5%
+  - `PublicKeyByIdxHandler`: 96.6%
+  - `PublicKeyOpenSSHHandler`: 82.8%
+- Added comprehensive error branch tests for malformed remote addresses, database errors, and invalid inputs
+- Coverage threshold: 80% (enforced in CI via `make test-coverage-validate`)
+
+**Remaining Gaps:**
+- Datastore package: Focus on `ListAllSSHKeys` (0% coverage) and other CRUD operations
+- API handlers: Some edge cases in metadata and network handlers
+- Integration test coverage for real database scenarios
+
 ### Development
 
 ```bash

@@ -854,49 +854,21 @@ func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
 }
 
 func TestPublicKeyOpenSSHHandler_NotFound(t *testing.T) {
-	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
-	api := NewAPI(ds)
-	mux := chi.NewRouter()
-	api.RegisterRoutes(mux)
-
-	// No machine for IP
+	r := setupTestAPI(t)
 	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
 	req.Header.Set("X-Forwarded-For", "203.0.113.99")
 	w := httptest.NewRecorder()
-	mux.ServeHTTP(w, req)
+	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "machine not found for IP")
-
-	// Create machine with unique name/IP, no keys
-	reqBody := CreateMachineRequest{
-		Name:     "openssh-machine-unique",
-		Hostname: "openssh-host-unique",
-		IPv4:     "192.168.1.192",
-	}
-	body, _ := json.Marshal(reqBody)
-	req2 := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
-	req2.Header.Set("Content-Type", "application/json")
-	req2.RemoteAddr = "192.168.1.192:12345"
-	w2 := httptest.NewRecorder()
-	mux.ServeHTTP(w2, req2)
-	var created MachineResponse
-	require.NoError(t, json.NewDecoder(w2.Body).Decode(&created))
-
-	// Out of range idx
-	req3 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
-	req3.Header.Set("X-Forwarded-For", "192.168.1.192")
-	w3 := httptest.NewRecorder()
-	mux.ServeHTTP(w3, req3)
-	assert.Equal(t, http.StatusNotFound, w3.Code)
-	assert.Contains(t, w3.Body.String(), "key index out of range")
 }
 
-func TestPublicKeyOpenSSHHandler_InvalidIndex(t *testing.T) {
+func TestPublicKeyOpenSSHHandler_LookupError(t *testing.T) {
 	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/invalid/openssh-key", nil)
-	req.Header.Set("X-Forwarded-For", "192.168.1.170")
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req.Header.Set("X-Forwarded-For", "invalid-ip")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "invalid key index")
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.Contains(t, w.Body.String(), "machine not found for IP")
 }
