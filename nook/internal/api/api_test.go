@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -15,6 +16,30 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// mockSSHKeysStore implements SSHKeysStore for testing error cases
+type mockSSHKeysStore struct {
+	getMachineError  error
+	listSSHKeysError error
+}
+
+func (m *mockSSHKeysStore) ListAllSSHKeys() ([]datastore.SSHKey, error) {
+	return nil, nil
+}
+
+func (m *mockSSHKeysStore) GetMachineByIPv4(ip string) (*datastore.Machine, error) {
+	if m.getMachineError != nil {
+		return nil, m.getMachineError
+	}
+	return &datastore.Machine{ID: 1, Name: "test", Hostname: "test", IPv4: ip}, nil
+}
+
+func (m *mockSSHKeysStore) ListSSHKeys(machineID int64) ([]datastore.SSHKey, error) {
+	if m.listSSHKeysError != nil {
+		return nil, m.listSSHKeysError
+	}
+	return []datastore.SSHKey{}, nil
+}
 
 func TestGetMachineByName_MissingName(t *testing.T) {
 	r := setupTestAPI(t)
@@ -160,6 +185,27 @@ func TestCreateMachine_MissingFields(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCreateMachine_InvalidIPv4(t *testing.T) {
+	r := setupTestAPI(t)
+
+	reqBody := CreateMachineRequest{
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "invalid-ip",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.100:12345"
+	w := httptest.NewRecorder()
+
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "Invalid IPv4 address format")
 }
 
 func TestGetMachine_NotFound(t *testing.T) {
@@ -634,6 +680,50 @@ func TestUpdateMachineHandler_InvalidID(t *testing.T) {
 	patchW := httptest.NewRecorder()
 	r.ServeHTTP(patchW, patchReq)
 	assert.Equal(t, http.StatusBadRequest, patchW.Code)
+	assert.Contains(t, patchW.Body.String(), "Invalid machine ID")
+}
+
+func TestUpdateMachineHandler_InvalidJSON(t *testing.T) {
+	r := setupTestAPI(t)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/1", bytes.NewReader([]byte("invalid json")))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusBadRequest, patchW.Code)
+	assert.Contains(t, patchW.Body.String(), "Invalid JSON")
+}
+
+func TestUpdateMachineHandler_InvalidIPv4(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine first
+	reqBody := CreateMachineRequest{
+		Name:     "update-machine",
+		Hostname: "update-host",
+		IPv4:     "192.168.1.160",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.160:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	var created MachineResponse
+	err := json.NewDecoder(w.Body).Decode(&created)
+	require.NoError(t, err)
+
+	// Update with invalid IPv4
+	updateBody := CreateMachineRequest{
+		Name:     "updated-machine",
+		Hostname: "updated-host",
+		IPv4:     "invalid-ip",
+	}
+	updateJSON, _ := json.Marshal(updateBody)
+	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), bytes.NewReader(updateJSON))
+	patchReq.Header.Set("Content-Type", "application/json")
+	patchW := httptest.NewRecorder()
+	r.ServeHTTP(patchW, patchReq)
+	assert.Equal(t, http.StatusBadRequest, patchW.Code)
+	assert.Contains(t, patchW.Body.String(), "Invalid IPv4 address format")
 }
 
 func TestUpdateMachineHandler_MissingFields(t *testing.T) {
@@ -738,6 +828,47 @@ func TestPublicKeysHandler_LookupError(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "machine not found for IP")
 }
 
+func TestPublicKeysHandler_MalformedRemoteAddr(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	// No X-Forwarded-For, and malformed RemoteAddr
+	req.RemoteAddr = "malformed-addr"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "unable to parse remote address")
+}
+
+func TestPublicKeysHandler_ListSSHKeysError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		listSSHKeysError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys", sshKeys.PublicKeysHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list SSH keys")
+}
+
+func TestPublicKeysHandler_GetMachineError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		getMachineError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys", sshKeys.PublicKeysHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to lookup machine by IP")
+}
+
 func TestPublicKeyByIdxHandler_Success(t *testing.T) {
 	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
 	api := NewAPI(ds)
@@ -821,6 +952,47 @@ func TestPublicKeyByIdxHandler_InvalidIndex(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "invalid key index")
 }
 
+func TestPublicKeyByIdxHandler_MalformedRemoteAddr(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0", nil)
+	// No X-Forwarded-For, and malformed RemoteAddr
+	req.RemoteAddr = "malformed-addr"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "unable to parse remote address")
+}
+
+func TestPublicKeyByIdxHandler_GetMachineError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		getMachineError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys/{idx}", sshKeys.PublicKeyByIdxHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to lookup machine by IP")
+}
+
+func TestPublicKeyByIdxHandler_ListSSHKeysError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		listSSHKeysError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys/{idx}", sshKeys.PublicKeyByIdxHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list SSH keys")
+}
+
 func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
 	ds, _ := datastore.New(testutil.NewTestDSN("TestAPI"))
 	api := NewAPI(ds)
@@ -871,4 +1043,45 @@ func TestPublicKeyOpenSSHHandler_LookupError(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
 	assert.Contains(t, w.Body.String(), "machine not found for IP")
+}
+
+func TestPublicKeyOpenSSHHandler_MalformedRemoteAddr(t *testing.T) {
+	r := setupTestAPI(t)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	// No X-Forwarded-For, and malformed RemoteAddr
+	req.RemoteAddr = "malformed-addr"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "unable to parse remote address")
+}
+
+func TestPublicKeyOpenSSHHandler_GetMachineError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		getMachineError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys/{idx}/openssh-key", sshKeys.PublicKeyOpenSSHHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to lookup machine by IP")
+}
+
+func TestPublicKeyOpenSSHHandler_ListSSHKeysError(t *testing.T) {
+	mockStore := &mockSSHKeysStore{
+		listSSHKeysError: errors.New("database error"),
+	}
+	sshKeys := NewSSHKeys(mockStore)
+	r := chi.NewRouter()
+	r.Get("/2021-01-03/meta-data/public-keys/{idx}/openssh-key", sshKeys.PublicKeyOpenSSHHandler)
+	req := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Contains(t, w.Body.String(), "failed to list SSH keys")
 }
