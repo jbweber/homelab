@@ -233,10 +233,5 @@ func RegisterSSHKeysRoutes(r chi.Router, store SSHKeysStore) {
 		r.Delete("/{id}", sshKeys.DeleteSSHKeyHandler)
 	})
 
-	// EC2-compatible public keys endpoints
-	r.Route("/2021-01-03/meta-data/public-keys", func(r chi.Router) {
-		r.Get("/", sshKeys.PublicKeysHandler)
-		r.Get("/{idx}", sshKeys.PublicKeyByIdxHandler)
-		r.Get("/{idx}/openssh-key", sshKeys.PublicKeyOpenSSHHandler)
-	})
+	// EC2-compatible public keys endpoints - removed as not needed for nocloud
 }

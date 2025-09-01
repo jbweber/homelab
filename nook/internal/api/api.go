@@ -23,7 +23,7 @@ type API struct {
 	sshKeyRepo  repository.SSHKeyRepository
 }
 
-// machineStoreAdapter adapts MachineRepository to MachinesStore interface
+// machineStoreAdapter adapts MachinesStore interface
 type machineStoreAdapter struct {
 	repo repository.MachineRepository
 }
@@ -342,50 +342,6 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// instanceIdentityDocumentHandler serves EC2-compatible instance identity document
-func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Request) {
-	// Extract requestor IP
-	ip, err := extractClientIP(r)
-	if err != nil {
-		fmt.Printf("[ERROR] %v\n", err)
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	// Lookup machine by IPv4
-	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			fmt.Printf("[ERROR] machine not found for IP %s\n", ip)
-			http.Error(w, "machine not found for IP", http.StatusNotFound)
-			return
-		}
-		fmt.Printf("[ERROR] failed to lookup machine by IP %s: %v\n", ip, err)
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-
-	// Compose EC2-compatible instance identity document
-	doc := map[string]interface{}{
-		"instanceId":       fmt.Sprintf("iid-%08d", machine.ID),
-		"privateIp":        machine.IPv4,
-		"hostname":         machine.Hostname,
-		"region":           "local-nocloud",        // NoCloud does not have regions
-		"availabilityZone": "local-nocloud-az",     // NoCloud does not have AZs
-		"architecture":     "x86_64",               // Default, could be made dynamic
-		"imageId":          "n/a",                  // Not tracked
-		"accountId":        "n/a",                  // Not tracked
-		"instanceType":     "nocloud",              // Default type
-		"pendingTime":      "2025-08-31T00:00:00Z", // Static for now
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(doc); err != nil {
-		log.Printf("failed to encode instance identity document: %v", err)
-	}
-}
-
 // NewAPI creates a new API instance with repositories initialized from the datastore
 func NewAPI(db *sql.DB) *API {
 	return &API{
@@ -401,11 +357,8 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	metaAdapter := &metaDataStoreAdapter{machineRepo: a.machineRepo}
 	meta := NewMetaData(metaAdapter)
 	r.Get("/meta-data", meta.NoCloudMetaDataHandler)
-	r.Get("/meta-data/", meta.MetaDataDirectoryHandler)
-	r.Get("/meta-data/{key}", meta.MetaDataKeyHandler)
 	r.Get("/user-data", a.noCloudUserDataHandler)
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
-	r.Get("/network-config", a.noCloudNetworkConfigHandler)
 
 	// Machines endpoints group
 	machineAdapter := &machineStoreAdapter{repo: a.machineRepo}
@@ -434,11 +387,6 @@ func (a *API) RegisterRoutes(r chi.Router) {
 		machineRepo: a.machineRepo,
 	}
 	RegisterSSHKeysRoutes(r, sshKeysAdapter)
-
-	// EC2-compatible endpoints group
-	r.Route("/2021-01-03", func(r chi.Router) {
-		r.Get("/dynamic/instance-identity/document", a.instanceIdentityDocumentHandler)
-	})
 }
 func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[DEBUG] noCloudUserDataHandler called")

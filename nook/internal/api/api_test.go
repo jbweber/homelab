@@ -65,15 +65,6 @@ func TestGetMachineByName_NotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
-func TestInstanceIdentityDocumentHandler_MalformedRemoteAddr(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req.RemoteAddr = "malformed-addr"
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
 func setupTestAPI(t *testing.T) *chi.Mux {
 	// Create test database with migrations
 	db, cleanup := testutil.SetupTestDB(t, "TestAPI")
@@ -216,7 +207,24 @@ func TestGetMachine_InvalidID(t *testing.T) {
 
 func TestNoCloudUserDataHandler(t *testing.T) {
 	r := setupTestAPI(t)
+
+	// Create a machine with the IP that will be making the request
+	reqBody := CreateMachineRequest{
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.0.2.1",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	createReq := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.RemoteAddr = "192.0.2.1:12345"
+	createW := httptest.NewRecorder()
+	r.ServeHTTP(createW, createReq)
+	require.Equal(t, http.StatusCreated, createW.Code)
+
 	req := httptest.NewRequest("GET", "/user-data", nil)
+	req.RemoteAddr = "192.0.2.1:12345"
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
@@ -230,16 +238,6 @@ func TestNoCloudVendorDataHandler(t *testing.T) {
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Equal(t, "", w.Body.String())
-}
-
-func TestNoCloudNetworkConfigHandler(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/network-config", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.NotEmpty(t, w.Body.String())
-	assert.Contains(t, w.Body.String(), "version: 2")
 }
 
 func TestNoCloudMetaDataHandler(t *testing.T) {
@@ -325,50 +323,8 @@ func TestNetworksHandler(t *testing.T) {
 	// Optionally check body if expected
 }
 
-func TestMetaDataDirectoryHandler(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/meta-data/", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	assert.NotEmpty(t, w.Body.String())
-}
 
-func TestMetaDataKeyHandler(t *testing.T) {
-	r := setupTestAPI(t)
-	// Create a machine for the test IP
-	reqBody := CreateMachineRequest{
-		Name:     "meta-key-machine",
-		Hostname: "meta-key-host",
-		IPv4:     "192.168.1.250",
-	}
-	body, _ := json.Marshal(reqBody)
-	createReq := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
-	createReq.Header.Set("Content-Type", "application/json")
-	createReq.RemoteAddr = "192.168.1.250:12345"
-	createW := httptest.NewRecorder()
-	r.ServeHTTP(createW, createReq)
-	assert.Equal(t, http.StatusCreated, createW.Code)
 
-	// Now request the metadata key for the same IP
-	req := httptest.NewRequest("GET", "/meta-data/instance-id", nil)
-	req.Header.Set("X-Forwarded-For", "192.168.1.250")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
-	// The output should be the instance-id value, e.g. "iid-00000001\n"
-	assert.Regexp(t, `iid-\d{8}\n`, w.Body.String())
-}
-
-func TestInstanceIdentityDocumentHandler_MachineNotFound(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req.RemoteAddr = "203.0.113.99:12345" // IP not in test DB
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "machine not found for IP")
-}
 func TestNoCloudMetaDataHandler_MalformedRemoteAddr(t *testing.T) {
 	r := setupTestAPI(t)
 	req := httptest.NewRequest("GET", "/meta-data", nil)
@@ -583,55 +539,11 @@ func TestGetMachineHandler_Valid(t *testing.T) {
 	assert.Equal(t, reqBody.IPv4, resp.IPv4)
 }
 
-func TestInstanceIdentityDocumentHandler_XForwardedFor(t *testing.T) {
-	r := setupTestAPI(t)
-	// Create a machine with a known IP
-	reqBody := CreateMachineRequest{
-		Name:     "xforwarded-machine",
-		Hostname: "xforwarded-host",
-		IPv4:     "192.168.1.251",
-	}
-	body, _ := json.Marshal(reqBody)
-	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "192.168.1.251:12345"
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusCreated, w.Code)
 
-	// Now call instance identity with X-Forwarded-For
-	req2 := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req2.Header.Set("X-Forwarded-For", "192.168.1.251")
-	w2 := httptest.NewRecorder()
-	r.ServeHTTP(w2, req2)
-	assert.Equal(t, http.StatusOK, w2.Code)
-	var doc map[string]interface{}
-	require.NoError(t, json.NewDecoder(w2.Body).Decode(&doc))
-	assert.Equal(t, "xforwarded-host", doc["hostname"])
-	assert.Equal(t, "192.168.1.251", doc["privateIp"])
-}
 
-func TestInstanceIdentityDocumentHandler_IPNotFound(t *testing.T) {
-	r := setupTestAPI(t)
-	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req.Header.Set("X-Forwarded-For", "203.0.113.99") // Not in test DB
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "machine not found for IP")
-}
 
-func TestInstanceIdentityDocumentHandler_LookupError(t *testing.T) {
-	r := setupTestAPI(t)
-	// Simulate a lookup error by passing an invalid IP format
-	req := httptest.NewRequest("GET", "/2021-01-03/dynamic/instance-identity/document", nil)
-	req.Header.Set("X-Forwarded-For", "invalid-ip")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-	// Should be 404 due to not found
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "machine not found for IP")
-}
+
+
 
 // End of Tests
 func TestNetworksHandler_Placeholder(t *testing.T) {

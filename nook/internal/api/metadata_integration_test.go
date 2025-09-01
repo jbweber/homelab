@@ -42,22 +42,7 @@ func TestMetaDataIntegration_Basic(t *testing.T) {
 	r := chi.NewRouter()
 	api.RegisterRoutes(r)
 
-	// Test 1: Get metadata directory
-	t.Run("MetaDataDirectory", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/meta-data/", nil)
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusOK, w.Code)
-		assert.Equal(t, "text/plain; charset=utf-8", w.Header().Get("Content-Type"))
-
-		body := w.Body.String()
-		assert.Contains(t, body, "instance-id")
-		assert.Contains(t, body, "hostname")
-		assert.Contains(t, body, "local-ipv4")
-	})
-
-	// Test 2: Test with non-existent IP
+	// Test 1: Test with non-existent IP
 	t.Run("NonExistentIP", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/meta-data", nil)
 		req.RemoteAddr = "203.0.113.99:12345" // Non-existent IP
@@ -133,16 +118,6 @@ func TestMetaDataIntegration_WithMachine(t *testing.T) {
 		assert.Contains(t, body, "local-ipv4: 192.168.1.50")
 	})
 
-	// Test unknown key with existing machine
-	t.Run("UnknownKeyWithMachine", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/meta-data/unknown-key", nil)
-		req.RemoteAddr = "192.168.1.50:12345"
-		w := httptest.NewRecorder()
-		r.ServeHTTP(w, req)
-
-		assert.Equal(t, http.StatusNotFound, w.Code)
-		assert.Contains(t, w.Body.String(), "unknown metadata key")
-	})
 }
 
 // TestMetaDataIntegration_VendorData tests vendor-data endpoint
@@ -159,20 +134,4 @@ func TestMetaDataIntegration_VendorData(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	// Vendor data is currently empty, so we just check the response
-}
-
-// TestMetaDataIntegration_NetworkConfig tests network-config endpoint
-func TestMetaDataIntegration_NetworkConfig(t *testing.T) {
-	api, cleanup := setupIntegrationTestAPI(t)
-	defer cleanup()
-
-	r := chi.NewRouter()
-	api.RegisterRoutes(r)
-
-	req := httptest.NewRequest("GET", "/network-config", nil)
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-	// Network config is currently empty, so we just check the response
 }

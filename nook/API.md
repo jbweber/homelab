@@ -10,10 +10,6 @@ Nook provides two distinct sets of API endpoints:
 ## Cloud-init Metadata Endpoints
 These endpoints are compatible with cloud-init and EC2-style metadata services. They use the requestor's IP address to look up the associated machine and return metadata specific to that machine.
 
-- `/2021-01-03/dynamic/instance-identity/document` — EC2-compatible instance identity document (IP-based lookup)
-- `/2021-01-03/meta-data/public-keys` — List of public keys for the requesting machine (IP-based lookup)
-- `/2021-01-03/meta-data/public-keys/{idx}` — Specific public key by index (IP-based lookup)
-- `/2021-01-03/meta-data/public-keys/{idx}/openssh-key` — OpenSSH-formatted key by index (IP-based lookup)
 - `/meta-data` — Instance metadata (YAML with hostname, instance-id, etc.) (IP-based lookup)
 - `/user-data` — Dynamic cloud-config with SSH keys and hostname (IP-based lookup)
 - `/vendor-data` — Vendor-specific data (currently empty) (IP-based lookup)
