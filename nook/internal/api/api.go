@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,13 +13,89 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/jbweber/homelab/nook/internal/datastore"
+	"github.com/jbweber/homelab/nook/internal/repository"
 )
 
-// ...existing code...
-
-// API holds the datastore dependency
+// API holds repository dependencies for clean data access
 type API struct {
-	ds *datastore.Datastore
+	machineRepo repository.MachineRepository
+	sshKeyRepo  repository.SSHKeyRepository
+	ds          *datastore.Datastore // Keep datastore for backward compatibility
+}
+
+// machineStoreAdapter adapts MachineRepository to MachinesStore interface
+type machineStoreAdapter struct {
+	repo repository.MachineRepository
+}
+
+func (a *machineStoreAdapter) ListMachines() ([]datastore.Machine, error) {
+	return a.repo.FindAll(context.Background())
+}
+
+func (a *machineStoreAdapter) CreateMachine(m datastore.Machine) (datastore.Machine, error) {
+	return a.repo.Save(context.Background(), m)
+}
+
+func (a *machineStoreAdapter) GetMachine(id int64) (*datastore.Machine, error) {
+	machine, err := a.repo.FindByID(context.Background(), id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &machine, nil
+}
+
+func (a *machineStoreAdapter) DeleteMachine(id int64) error {
+	return a.repo.DeleteByID(context.Background(), id)
+}
+
+func (a *machineStoreAdapter) GetMachineByName(name string) (*datastore.Machine, error) {
+	machine, err := a.repo.FindByName(context.Background(), name)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &machine, nil
+}
+
+func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine, error) {
+	machine, err := a.repo.FindByIPv4(context.Background(), ipv4)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &machine, nil
+}
+
+// sshKeysStoreAdapter adapts repositories to SSHKeysStore interface
+type sshKeysStoreAdapter struct {
+	sshKeyRepo  repository.SSHKeyRepository
+	machineRepo repository.MachineRepository
+}
+
+func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]datastore.SSHKey, error) {
+	return a.sshKeyRepo.FindAll(context.Background())
+}
+
+func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*datastore.Machine, error) {
+	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &machine, nil
+}
+
+func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]datastore.SSHKey, error) {
+	return a.sshKeyRepo.FindByMachineID(context.Background(), machineID)
 }
 
 // extractClientIP extracts the client IP from the request, preferring X-Forwarded-For header
@@ -175,7 +253,11 @@ func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Req
 
 // NewAPI creates a new API instance with the given datastore
 func NewAPI(ds *datastore.Datastore) *API {
-	return &API{ds: ds}
+	return &API{
+		machineRepo: repository.NewMachineRepository(ds),
+		sshKeyRepo:  repository.NewSSHKeyRepository(ds),
+		ds:          ds, // Keep datastore for backward compatibility
+	}
 }
 
 // RegisterRoutes registers all API endpoints to the given chi router.
@@ -191,7 +273,8 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Get("/network-config", a.noCloudNetworkConfigHandler)
 
 	// Machines endpoints group
-	machines := NewMachines(a.ds)
+	machineAdapter := &machineStoreAdapter{repo: a.machineRepo}
+	machines := NewMachines(machineAdapter)
 	r.Route("/api/v0/machines", func(r chi.Router) {
 		r.Get("/", machines.ListMachinesHandler)
 		r.Post("/", machines.CreateMachineHandler)
@@ -209,7 +292,11 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// SSH keys endpoints group - registered by the SSH keys module
-	RegisterSSHKeysRoutes(r, a.ds)
+	sshKeysAdapter := &sshKeysStoreAdapter{
+		sshKeyRepo:  a.sshKeyRepo,
+		machineRepo: a.machineRepo,
+	}
+	RegisterSSHKeysRoutes(r, sshKeysAdapter)
 
 	// EC2-compatible endpoints group
 	r.Route("/2021-01-03", func(r chi.Router) {
