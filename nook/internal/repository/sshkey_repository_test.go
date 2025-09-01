@@ -97,26 +97,8 @@ func TestSSHKeyRepository_FindByID(t *testing.T) {
 }
 
 func TestSSHKeyRepository_FindByMachineID(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeyRepository_FindByMachineID"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupSSHKeyTestDBWithMigrations(t, "TestSSHKeyRepository_FindByMachineID")
+	defer cleanup()
 
 	repo := NewSSHKeyRepository(db)
 	ctx := context.Background()
@@ -160,26 +142,8 @@ func TestSSHKeyRepository_FindByMachineID(t *testing.T) {
 }
 
 func TestSSHKeyRepository_FindAll(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeyRepository_FindAll"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupSSHKeyTestDBWithMigrations(t, "TestSSHKeyRepository_FindAll")
+	defer cleanup()
 
 	repo := NewSSHKeyRepository(db)
 	ctx := context.Background()
@@ -218,26 +182,8 @@ func TestSSHKeyRepository_FindAll(t *testing.T) {
 }
 
 func TestSSHKeyRepository_DeleteByID(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeyRepository_DeleteByID"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupSSHKeyTestDBWithMigrations(t, "TestSSHKeyRepository_DeleteByID")
+	defer cleanup()
 
 	repo := NewSSHKeyRepository(db)
 	ctx := context.Background()
@@ -280,26 +226,8 @@ func TestSSHKeyRepository_DeleteByID(t *testing.T) {
 }
 
 func TestSSHKeyRepository_ExistsByID(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeyRepository_ExistsByID"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupSSHKeyTestDBWithMigrations(t, "TestSSHKeyRepository_ExistsByID")
+	defer cleanup()
 
 	repo := NewSSHKeyRepository(db)
 	ctx := context.Background()
@@ -333,32 +261,14 @@ func TestSSHKeyRepository_ExistsByID(t *testing.T) {
 }
 
 func TestSSHKeyRepository_ErrorHandling(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeyRepository_ErrorHandling"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
-
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupSSHKeyTestDBWithMigrations(t, "TestSSHKeyRepository_ErrorHandling")
+	defer cleanup()
 
 	repo := NewSSHKeyRepository(db)
 	ctx := context.Background()
 
 	// Test FindByID with non-existent key
-	_, err = repo.FindByID(ctx, 99999)
+	_, err := repo.FindByID(ctx, 99999)
 	assert.Error(t, err)
 	assert.ErrorIs(t, err, ErrNotFound)
 
