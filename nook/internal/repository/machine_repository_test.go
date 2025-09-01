@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jbweber/homelab/nook/internal/datastore"
+	"github.com/jbweber/homelab/nook/internal/domain"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 )
 
@@ -15,11 +16,11 @@ func TestMachineRepository_Save(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_Save"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
-	machine := datastore.Machine{
+	machine := domain.Machine{
 		Name:     "test-machine",
 		Hostname: "test-host",
 		IPv4:     "192.168.1.100",
@@ -37,11 +38,11 @@ func TestMachineRepository_FindByID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_FindByID"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
-	machine := datastore.Machine{
+	machine := domain.Machine{
 		Name:     "test-machine",
 		Hostname: "test-host",
 		IPv4:     "192.168.1.100",
@@ -68,11 +69,11 @@ func TestMachineRepository_FindByName(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_FindByName"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
-	machine := datastore.Machine{
+	machine := domain.Machine{
 		Name:     "test-machine",
 		Hostname: "test-host",
 		IPv4:     "192.168.1.100",
@@ -98,11 +99,11 @@ func TestMachineRepository_FindByIPv4(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_FindByIPv4"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
-	machine := datastore.Machine{
+	machine := domain.Machine{
 		Name:     "test-machine",
 		Hostname: "test-host",
 		IPv4:     "192.168.1.100",
@@ -128,16 +129,16 @@ func TestMachineRepository_FindAll(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_FindAll"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create multiple machines
-	machine1 := datastore.Machine{
+	machine1 := domain.Machine{
 		Name:     "machine1",
 		Hostname: "host1",
 		IPv4:     "192.168.1.100",
 	}
-	machine2 := datastore.Machine{
+	machine2 := domain.Machine{
 		Name:     "machine2",
 		Hostname: "host2",
 		IPv4:     "192.168.1.101",
@@ -166,11 +167,11 @@ func TestMachineRepository_DeleteByID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestMachineRepository_DeleteByID"))
 	require.NoError(t, err)
 
-	repo := NewMachineRepository(ds)
+	repo := NewMachineRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
-	machine := datastore.Machine{
+	machine := domain.Machine{
 		Name:     "test-machine",
 		Hostname: "test-host",
 		IPv4:     "192.168.1.100",

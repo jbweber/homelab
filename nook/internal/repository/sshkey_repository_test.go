@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/jbweber/homelab/nook/internal/datastore"
+	"github.com/jbweber/homelab/nook/internal/domain"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ func TestSSHKeyRepository_Save(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_Save"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine first (SSH keys need a machine)
@@ -26,7 +27,7 @@ func TestSSHKeyRepository_Save(t *testing.T) {
 	require.NoError(t, err)
 
 	// Test Save (which should create a new SSH key)
-	key := datastore.SSHKey{
+	key := domain.SSHKey{
 		MachineID: machine.ID,
 		KeyText:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey",
 	}
@@ -42,7 +43,7 @@ func TestSSHKeyRepository_FindByID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_FindByID"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine and SSH key first
@@ -73,7 +74,7 @@ func TestSSHKeyRepository_FindByMachineID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_FindByMachineID"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine
@@ -107,7 +108,7 @@ func TestSSHKeyRepository_FindAll(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_FindAll"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine and some SSH keys
@@ -136,7 +137,7 @@ func TestSSHKeyRepository_DeleteByID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_DeleteByID"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine and SSH key
@@ -174,7 +175,7 @@ func TestSSHKeyRepository_ExistsByID(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_ExistsByID"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Create a machine and SSH key
@@ -203,7 +204,7 @@ func TestSSHKeyRepository_ErrorHandling(t *testing.T) {
 	ds, err := datastore.New(testutil.NewTestDSN("TestSSHKeyRepository_ErrorHandling"))
 	require.NoError(t, err)
 
-	repo := NewSSHKeyRepository(ds)
+	repo := NewSSHKeyRepository(ds.DB)
 	ctx := context.Background()
 
 	// Test FindByID with non-existent key
