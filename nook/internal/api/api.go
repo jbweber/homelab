@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	"log"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jbweber/homelab/nook/internal/datastore"
 	"github.com/jbweber/homelab/nook/internal/domain"
 	"github.com/jbweber/homelab/nook/internal/repository"
 )
@@ -28,15 +28,15 @@ type machineStoreAdapter struct {
 	repo repository.MachineRepository
 }
 
-func (a *machineStoreAdapter) ListMachines() ([]datastore.Machine, error) {
+func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
 	machines, err := a.repo.FindAll(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	var result []datastore.Machine
+	// Convert domain.Machine to api.Machine
+	var result []Machine
 	for _, m := range machines {
-		result = append(result, datastore.Machine{
+		result = append(result, Machine{
 			ID:       m.ID,
 			Name:     m.Name,
 			Hostname: m.Hostname,
@@ -46,8 +46,8 @@ func (a *machineStoreAdapter) ListMachines() ([]datastore.Machine, error) {
 	return result, nil
 }
 
-func (a *machineStoreAdapter) CreateMachine(m datastore.Machine) (datastore.Machine, error) {
-	// Convert datastore.Machine to domain.Machine
+func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
+	// Convert api.Machine to domain.Machine
 	domainMachine := domain.Machine{
 		ID:       m.ID,
 		Name:     m.Name,
@@ -56,10 +56,10 @@ func (a *machineStoreAdapter) CreateMachine(m datastore.Machine) (datastore.Mach
 	}
 	saved, err := a.repo.Save(context.Background(), domainMachine)
 	if err != nil {
-		return datastore.Machine{}, err
+		return Machine{}, err
 	}
-	// Convert back to datastore.Machine
-	return datastore.Machine{
+	// Convert back to api.Machine
+	return Machine{
 		ID:       saved.ID,
 		Name:     saved.Name,
 		Hostname: saved.Hostname,
@@ -67,7 +67,7 @@ func (a *machineStoreAdapter) CreateMachine(m datastore.Machine) (datastore.Mach
 	}, nil
 }
 
-func (a *machineStoreAdapter) GetMachine(id int64) (*datastore.Machine, error) {
+func (a *machineStoreAdapter) GetMachine(id int64) (*Machine, error) {
 	machine, err := a.repo.FindByID(context.Background(), id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -75,8 +75,8 @@ func (a *machineStoreAdapter) GetMachine(id int64) (*datastore.Machine, error) {
 		}
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	return &datastore.Machine{
+	// Convert domain.Machine to api.Machine
+	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
 		Hostname: machine.Hostname,
@@ -88,7 +88,7 @@ func (a *machineStoreAdapter) DeleteMachine(id int64) error {
 	return a.repo.DeleteByID(context.Background(), id)
 }
 
-func (a *machineStoreAdapter) GetMachineByName(name string) (*datastore.Machine, error) {
+func (a *machineStoreAdapter) GetMachineByName(name string) (*Machine, error) {
 	machine, err := a.repo.FindByName(context.Background(), name)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -96,8 +96,8 @@ func (a *machineStoreAdapter) GetMachineByName(name string) (*datastore.Machine,
 		}
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	return &datastore.Machine{
+	// Convert domain.Machine to api.Machine
+	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
 		Hostname: machine.Hostname,
@@ -105,7 +105,7 @@ func (a *machineStoreAdapter) GetMachineByName(name string) (*datastore.Machine,
 	}, nil
 }
 
-func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine, error) {
+func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	machine, err := a.repo.FindByIPv4(context.Background(), ipv4)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -113,8 +113,8 @@ func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine,
 		}
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	return &datastore.Machine{
+	// Convert domain.Machine to api.Machine
+	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
 		Hostname: machine.Hostname,
@@ -128,15 +128,15 @@ type sshKeysStoreAdapter struct {
 	machineRepo repository.MachineRepository
 }
 
-func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]datastore.SSHKey, error) {
+func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
 	keys, err := a.sshKeyRepo.FindAll(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	// Convert domain.SSHKey to datastore.SSHKey
-	var result []datastore.SSHKey
+	// Convert domain.SSHKey to api.SSHKey
+	var result []SSHKey
 	for _, k := range keys {
-		result = append(result, datastore.SSHKey{
+		result = append(result, SSHKey{
 			ID:        k.ID,
 			MachineID: k.MachineID,
 			KeyText:   k.KeyText,
@@ -145,7 +145,7 @@ func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]datastore.SSHKey, error) {
 	return result, nil
 }
 
-func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*datastore.Machine, error) {
+func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) {
 	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -153,8 +153,8 @@ func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*datastore.Machine, e
 		}
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	return &datastore.Machine{
+	// Convert domain.Machine to api.Machine
+	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
 		Hostname: machine.Hostname,
@@ -162,15 +162,15 @@ func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*datastore.Machine, e
 	}, nil
 }
 
-func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]datastore.SSHKey, error) {
+func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error) {
 	keys, err := a.sshKeyRepo.FindByMachineID(context.Background(), machineID)
 	if err != nil {
 		return nil, err
 	}
-	// Convert domain.SSHKey to datastore.SSHKey
-	var result []datastore.SSHKey
+	// Convert domain.SSHKey to api.SSHKey
+	var result []SSHKey
 	for _, k := range keys {
-		result = append(result, datastore.SSHKey{
+		result = append(result, SSHKey{
 			ID:        k.ID,
 			MachineID: k.MachineID,
 			KeyText:   k.KeyText,
@@ -184,7 +184,7 @@ type metaDataStoreAdapter struct {
 	machineRepo repository.MachineRepository
 }
 
-func (a *metaDataStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine, error) {
+func (a *metaDataStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	machine, err := a.machineRepo.FindByIPv4(context.Background(), ipv4)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -192,8 +192,8 @@ func (a *metaDataStoreAdapter) GetMachineByIPv4(ipv4 string) (*datastore.Machine
 		}
 		return nil, err
 	}
-	// Convert domain.Machine to datastore.Machine
-	return &datastore.Machine{
+	// Convert domain.Machine to api.Machine
+	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
 		Hostname: machine.Hostname,
@@ -355,10 +355,10 @@ func (a *API) instanceIdentityDocumentHandler(w http.ResponseWriter, r *http.Req
 }
 
 // NewAPI creates a new API instance with repositories initialized from the datastore
-func NewAPI(ds *datastore.Datastore) *API {
+func NewAPI(db *sql.DB) *API {
 	return &API{
-		machineRepo: repository.NewMachineRepository(ds.DB),
-		sshKeyRepo:  repository.NewSSHKeyRepository(ds.DB),
+		machineRepo: repository.NewMachineRepository(db),
+		sshKeyRepo:  repository.NewSSHKeyRepository(db),
 	}
 }
 

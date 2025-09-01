@@ -9,17 +9,24 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jbweber/homelab/nook/internal/datastore"
 )
+
+// Machine represents a virtual machine in the system
+type Machine struct {
+	ID       int64  // Unique identifier
+	Name     string // Machine name
+	Hostname string // Hostname for NoCloud metadata
+	IPv4     string // Unique IPv4 address
+}
 
 // MachinesStore defines the datastore interface for machine handlers
 type MachinesStore interface {
-	ListMachines() ([]datastore.Machine, error)
-	CreateMachine(datastore.Machine) (datastore.Machine, error)
-	GetMachine(id int64) (*datastore.Machine, error)
+	ListMachines() ([]Machine, error)
+	CreateMachine(Machine) (Machine, error)
+	GetMachine(id int64) (*Machine, error)
 	DeleteMachine(id int64) error
-	GetMachineByName(name string) (*datastore.Machine, error)
-	GetMachineByIPv4(ipv4 string) (*datastore.Machine, error)
+	GetMachineByName(name string) (*Machine, error)
+	GetMachineByIPv4(ipv4 string) (*Machine, error)
 }
 
 // Machines groups machine handlers for testability
@@ -116,7 +123,7 @@ func (m *Machines) CreateMachineHandler(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	machine := datastore.Machine{
+	machine := Machine{
 		Name:     req.Name,
 		Hostname: req.Hostname,
 		IPv4:     req.IPv4,

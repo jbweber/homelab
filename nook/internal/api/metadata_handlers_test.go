@@ -8,21 +8,20 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jbweber/homelab/nook/internal/datastore"
 )
 
 type mockMetaDataStore struct {
-	machine *datastore.Machine
+	machine *Machine
 	err     error
 }
 
-func (m *mockMetaDataStore) GetMachineByIPv4(ipv4 string) (*datastore.Machine, error) {
+func (m *mockMetaDataStore) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	return m.machine, m.err
 }
 
 func TestNoCloudMetaDataHandler_Success(t *testing.T) {
 	store := &mockMetaDataStore{
-		machine: &datastore.Machine{ID: 42, Hostname: "testhost", IPv4: "1.2.3.4"},
+		machine: &Machine{ID: 42, Name: "test", Hostname: "testhost", IPv4: "1.2.3.4"},
 	}
 	meta := NewMetaData(store)
 	req := httptest.NewRequest("GET", "/meta-data", nil)
@@ -63,7 +62,7 @@ func TestNoCloudMetaDataHandler_Error(t *testing.T) {
 
 func TestMetaDataKeyHandler_Success(t *testing.T) {
 	store := &mockMetaDataStore{
-		machine: &datastore.Machine{ID: 42, Hostname: "testhost", IPv4: "1.2.3.4"},
+		machine: &Machine{ID: 42, Name: "test", Hostname: "testhost", IPv4: "1.2.3.4"},
 	}
 	meta := NewMetaData(store)
 	req := httptest.NewRequest("GET", "/meta-data/instance-id", nil)
@@ -81,7 +80,7 @@ func TestMetaDataKeyHandler_Success(t *testing.T) {
 
 func TestMetaDataKeyHandler_UnknownKey(t *testing.T) {
 	store := &mockMetaDataStore{
-		machine: &datastore.Machine{ID: 42, Hostname: "testhost", IPv4: "1.2.3.4"},
+		machine: &Machine{ID: 42, Name: "test", Hostname: "testhost", IPv4: "1.2.3.4"},
 	}
 	meta := NewMetaData(store)
 	req := httptest.NewRequest("GET", "/meta-data/unknown", nil)

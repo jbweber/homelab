@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,10 +11,10 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jbweber/homelab/nook/internal/datastore"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
 
 func TestGetMachineByName_MissingName(t *testing.T) {
@@ -74,15 +75,30 @@ func TestInstanceIdentityDocumentHandler_MalformedRemoteAddr(t *testing.T) {
 }
 
 func setupTestAPI(t *testing.T) *chi.Mux {
-	// Create test datastore
-	testDS, err := datastore.New(testutil.NewTestDSN("TestAPI"))
-	if err != nil {
-		t.Fatalf("Failed to create test datastore: %v", err)
-	}
+	// Create test database
+	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestAPI"))
+	require.NoError(t, err)
+	
+	// Run migrations
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		hostname TEXT NOT NULL,
+		ipv4 TEXT NOT NULL UNIQUE
+	);`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		machine_id INTEGER NOT NULL,
+		key_text TEXT NOT NULL,
+		FOREIGN KEY (machine_id) REFERENCES machines(id)
+	);`)
+	require.NoError(t, err)
 
 	// Setup router
 	r := chi.NewRouter()
-	api := NewAPI(testDS)
+	api := NewAPI(db)
 	api.RegisterRoutes(r)
 
 	return r

@@ -6,12 +6,11 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jbweber/homelab/nook/internal/datastore"
 )
 
 // MetaDataStore describes the datastore methods needed for metadata endpoints.
 type MetaDataStore interface {
-	GetMachineByIPv4(ipv4 string) (*datastore.Machine, error)
+	GetMachineByIPv4(ipv4 string) (*Machine, error)
 	// Add more methods here as needed for other metadata endpoints
 }
 

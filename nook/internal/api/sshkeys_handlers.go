@@ -8,15 +8,20 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/jbweber/homelab/nook/internal/datastore"
 )
+
+// SSHKey represents an SSH public key associated with a machine
+type SSHKey struct {
+	ID        int64  // Unique identifier
+	MachineID int64  // Foreign key to Machine
+	KeyText   string // Public SSH key text
+}
 
 // SSHKeysStore defines the datastore interface for SSH key handlers
 type SSHKeysStore interface {
-	ListAllSSHKeys() ([]datastore.SSHKey, error)
-	GetMachineByIPv4(ip string) (*datastore.Machine, error)
-	ListSSHKeys(machineID int64) ([]datastore.SSHKey, error)
+	ListAllSSHKeys() ([]SSHKey, error)
+	GetMachineByIPv4(ip string) (*Machine, error)
+	ListSSHKeys(machineID int64) ([]SSHKey, error)
 }
 
 // PublicKeysHandler handles /2021-01-03/meta-data/public-keys

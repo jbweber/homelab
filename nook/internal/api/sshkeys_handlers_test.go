@@ -2,6 +2,8 @@ package api
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -12,8 +14,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/jbweber/homelab/nook/internal/datastore"
+	"github.com/jbweber/homelab/nook/internal/domain"
+	"github.com/jbweber/homelab/nook/internal/repository"
 	"github.com/jbweber/homelab/nook/internal/testutil"
+	_ "modernc.org/sqlite"
 )
 
 // mockSSHKeysStore implements SSHKeysStore for testing error cases
@@ -22,22 +26,22 @@ type mockSSHKeysStore struct {
 	listSSHKeysError error
 }
 
-func (m *mockSSHKeysStore) ListAllSSHKeys() ([]datastore.SSHKey, error) {
+func (m *mockSSHKeysStore) ListAllSSHKeys() ([]SSHKey, error) {
 	return nil, nil
 }
 
-func (m *mockSSHKeysStore) GetMachineByIPv4(ip string) (*datastore.Machine, error) {
+func (m *mockSSHKeysStore) GetMachineByIPv4(ip string) (*Machine, error) {
 	if m.getMachineError != nil {
 		return nil, m.getMachineError
 	}
-	return &datastore.Machine{ID: 1, Name: "test", Hostname: "test", IPv4: ip}, nil
+	return &Machine{ID: 1, Name: "test", Hostname: "test", IPv4: ip}, nil
 }
 
-func (m *mockSSHKeysStore) ListSSHKeys(machineID int64) ([]datastore.SSHKey, error) {
+func (m *mockSSHKeysStore) ListSSHKeys(machineID int64) ([]SSHKey, error) {
 	if m.listSSHKeysError != nil {
 		return nil, m.listSSHKeysError
 	}
-	return []datastore.SSHKey{}, nil
+	return []SSHKey{}, nil
 }
 
 // setupSSHKeysTestRouter creates a test router with only SSH keys routes registered
@@ -47,18 +51,91 @@ func setupSSHKeysTestRouter(t *testing.T, store SSHKeysStore) *chi.Mux {
 	return r
 }
 
-// setupSSHKeysTestAPI creates a test router with full API but focused on SSH keys testing
-func setupSSHKeysTestAPI(t *testing.T) (*chi.Mux, *datastore.Datastore) {
-	// Create test datastore
-	testDS, err := datastore.New(testutil.NewTestDSN("TestSSHKeys"))
+// testSSHKeysStoreAdapter adapts repositories to SSHKeysStore interface for testing
+type testSSHKeysStoreAdapter struct {
+	machineRepo repository.MachineRepository
+	sshKeyRepo  repository.SSHKeyRepository
+}
+
+func (a *testSSHKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
+	ctx := context.Background()
+	keys, err := a.sshKeyRepo.FindAll(ctx)
 	if err != nil {
-		t.Fatalf("Failed to create test datastore: %v", err)
+		return nil, err
 	}
+	
+	result := make([]SSHKey, len(keys))
+	for i, key := range keys {
+		result[i] = SSHKey{
+			ID:        key.ID,
+			MachineID: key.MachineID,
+			KeyText:   key.KeyText,
+		}
+	}
+	return result, nil
+}
+
+func (a *testSSHKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) {
+	ctx := context.Background()
+	machine, err := a.machineRepo.FindByIPv4(ctx, ip)
+	if err != nil {
+		return nil, err
+	}
+	
+	return &Machine{
+		ID:       machine.ID,
+		Name:     machine.Name,
+		Hostname: machine.Hostname,
+		IPv4:     machine.IPv4,
+	}, nil
+}
+
+func (a *testSSHKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error) {
+	ctx := context.Background()
+	keys, err := a.sshKeyRepo.FindByMachineID(ctx, machineID)
+	if err != nil {
+		return nil, err
+	}
+	
+	result := make([]SSHKey, len(keys))
+	for i, key := range keys {
+		result[i] = SSHKey{
+			ID:        key.ID,
+			MachineID: key.MachineID,
+			KeyText:   key.KeyText,
+		}
+	}
+	return result, nil
+}
+
+// setupSSHKeysTestAPI creates a test router with full API but focused on SSH keys testing
+func setupSSHKeysTestAPI(t *testing.T) (*chi.Mux, *sql.DB) {
+	// Create test database
+	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeys"))
+	require.NoError(t, err)
+	
+	// Run migrations
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		hostname TEXT NOT NULL,
+		ipv4 TEXT NOT NULL UNIQUE
+	);`)
+	require.NoError(t, err)
+
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		machine_id INTEGER NOT NULL,
+		key_text TEXT NOT NULL,
+		FOREIGN KEY (machine_id) REFERENCES machines(id)
+	);`)
+	require.NoError(t, err)
 
 	r := chi.NewRouter()
-	api := NewAPI(testDS)
+	api := NewAPI(db)
 	api.RegisterRoutes(r)
-	return r, testDS
+	
+	return r, db
 }
 
 func TestSSHKeysHandler(t *testing.T) {
@@ -80,7 +157,12 @@ func TestSSHKeysHandler_Placeholder(t *testing.T) {
 }
 
 func TestPublicKeysHandler_Success(t *testing.T) {
-	r, _ := setupSSHKeysTestAPI(t)
+	r, db := setupSSHKeysTestAPI(t)
+	
+	// Create repositories for test data setup
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ctx := context.Background()
+	
 	// Create a machine
 	reqBody := CreateMachineRequest{
 		Name:     "ssh-machine",
@@ -97,11 +179,19 @@ func TestPublicKeysHandler_Success(t *testing.T) {
 	var created MachineResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 
-	// Insert SSH key for this machine
-	ds, _ := datastore.New(testutil.NewTestDSN("TestSSHKeys"))
-	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1")
+	// Insert SSH key for this machine using repository
+	key := domain.SSHKey{
+		MachineID: created.ID,
+		KeyText:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1",
+	}
+	_, err := sshKeyRepo.Save(ctx, key)
 	require.NoError(t, err)
-	_, err = ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2")
+	
+	key2 := domain.SSHKey{
+		MachineID: created.ID,
+		KeyText:   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2",
+	}
+	_, err = sshKeyRepo.Save(ctx, key2)
 	require.NoError(t, err)
 
 	// Use X-Forwarded-For to trigger publicKeysHandler
@@ -174,7 +264,11 @@ func TestPublicKeysHandler_GetMachineError(t *testing.T) {
 }
 
 func TestPublicKeyByIdxHandler_Success(t *testing.T) {
-	r, ds := setupSSHKeysTestAPI(t)
+	r, db := setupSSHKeysTestAPI(t)
+	
+	// Create repositories for test data setup
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ctx := context.Background()
 
 	// Create machine and keys
 	reqBody := CreateMachineRequest{
@@ -191,9 +285,18 @@ func TestPublicKeyByIdxHandler_Success(t *testing.T) {
 	var created MachineResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 
-	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCidxkey1")
+	key1 := domain.SSHKey{
+		MachineID: created.ID,
+		KeyText:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCidxkey1",
+	}
+	_, err := sshKeyRepo.Save(ctx, key1)
 	require.NoError(t, err)
-	_, err = ds.CreateSSHKey(created.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2")
+	
+	key2 := domain.SSHKey{
+		MachineID: created.ID,
+		KeyText:   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2",
+	}
+	_, err = sshKeyRepo.Save(ctx, key2)
 	require.NoError(t, err)
 
 	// Get key at idx 1
@@ -288,7 +391,11 @@ func TestPublicKeyByIdxHandler_ListSSHKeysError(t *testing.T) {
 }
 
 func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
-	r, ds := setupSSHKeysTestAPI(t)
+	r, db := setupSSHKeysTestAPI(t)
+	
+	// Create repositories for test data setup
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ctx := context.Background()
 
 	// Create machine and keys
 	reqBody := CreateMachineRequest{
@@ -305,7 +412,11 @@ func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
 	var created MachineResponse
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&created))
 
-	_, err := ds.CreateSSHKey(created.ID, "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1")
+	key := domain.SSHKey{
+		MachineID: created.ID,
+		KeyText:   "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCopensshkey1",
+	}
+	_, err := sshKeyRepo.Save(ctx, key)
 	require.NoError(t, err)
 
 	req2 := httptest.NewRequest("GET", "/2021-01-03/meta-data/public-keys/0/openssh-key", nil)
