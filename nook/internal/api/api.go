@@ -162,23 +162,6 @@ func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) {
 	}, nil
 }
 
-func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error) {
-	keys, err := a.sshKeyRepo.FindByMachineID(context.Background(), machineID)
-	if err != nil {
-		return nil, err
-	}
-	// Convert domain.SSHKey to api.SSHKey
-	var result []SSHKey
-	for _, k := range keys {
-		result = append(result, SSHKey{
-			ID:        k.ID,
-			MachineID: k.MachineID,
-			KeyText:   k.KeyText,
-		})
-	}
-	return result, nil
-}
-
 func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SSHKey, error) {
 	key, err := a.sshKeyRepo.CreateForMachine(context.Background(), machineID, keyText)
 	if err != nil {

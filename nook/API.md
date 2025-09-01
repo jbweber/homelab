@@ -38,6 +38,14 @@ These endpoints are for managing the data behind the service. They do **not** pe
 
 ---
 
+## Removed Endpoints
+The following EC2-style endpoints were removed as they were not needed for nocloud compatibility:
+- `/2021-01-03/meta-data/public-keys` (EC2-style SSH key listing)
+- `/2021-01-03/meta-data/public-keys/{idx}` (EC2-style SSH key by index)
+- `/2021-01-03/meta-data/public-keys/{idx}/openssh-key` (EC2-style OpenSSH format)
+
+---
+
 ## Development & Testing Instructions
 - Management endpoints should **never** use IP-based machine lookup.
 - Cloud-init endpoints **must** use IP-based machine lookup for correct metadata delivery.

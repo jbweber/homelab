@@ -2,7 +2,6 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -21,113 +20,8 @@ type SSHKey struct {
 type SSHKeysStore interface {
 	ListAllSSHKeys() ([]SSHKey, error)
 	GetMachineByIPv4(ip string) (*Machine, error)
-	ListSSHKeys(machineID int64) ([]SSHKey, error)
 	CreateSSHKey(machineID int64, keyText string) (*SSHKey, error)
 	DeleteSSHKey(id int64) error
-}
-
-// PublicKeysHandler handles /2021-01-03/meta-data/public-keys
-func (s *SSHKeys) PublicKeysHandler(w http.ResponseWriter, r *http.Request) {
-	ip, err := extractClientIP(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	machine, err := s.store.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-	log.Printf("Serving public-keys for machine %s (IP: %s)", machine.Name, ip)
-	keys, err := s.store.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	for _, k := range keys {
-		if _, err := fmt.Fprintln(w, k.KeyText); err != nil {
-			log.Printf("failed to write public key: %v", err)
-		}
-	}
-}
-
-// PublicKeyByIdxHandler handles /2021-01-03/meta-data/public-keys/{idx}
-func (s *SSHKeys) PublicKeyByIdxHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		http.Error(w, "invalid key index", http.StatusBadRequest)
-		return
-	}
-	ip, err := extractClientIP(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	machine, err := s.store.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-	keys, err := s.store.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-	if idx < 0 || idx >= len(keys) {
-		http.Error(w, "key index out of range", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
-		log.Printf("failed to write public key by idx: %v", err)
-	}
-}
-
-// PublicKeyOpenSSHHandler handles /2021-01-03/meta-data/public-keys/{idx}/openssh-key
-func (s *SSHKeys) PublicKeyOpenSSHHandler(w http.ResponseWriter, r *http.Request) {
-	idxStr := chi.URLParam(r, "idx")
-	idx, err := strconv.Atoi(idxStr)
-	if err != nil {
-		http.Error(w, "invalid key index", http.StatusBadRequest)
-		return
-	}
-	ip, err := extractClientIP(r)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-	machine, err := s.store.GetMachineByIPv4(ip)
-	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
-		return
-	}
-	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
-		return
-	}
-	keys, err := s.store.ListSSHKeys(machine.ID)
-	if err != nil {
-		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
-		return
-	}
-	if idx < 0 || idx >= len(keys) {
-		http.Error(w, "key index out of range", http.StatusNotFound)
-		return
-	}
-	w.Header().Set("Content-Type", "text/plain")
-	if _, err := fmt.Fprintln(w, keys[idx].KeyText); err != nil {
-		log.Printf("failed to write public key OpenSSH: %v", err)
-	}
 }
 
 // SSHKeys groups SSH key handlers for testability
