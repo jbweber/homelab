@@ -36,7 +36,7 @@ func TestMigrator_RunMigrations(t *testing.T) {
 	// Verify current version
 	version, err := migrator.GetCurrentVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), version)
+	assert.Equal(t, int64(3), version)
 
 	// Verify tables exist
 	var count int

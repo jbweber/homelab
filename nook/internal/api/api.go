@@ -23,11 +23,13 @@ type API struct {
 	sshKeyRepo    repository.SSHKeyRepository
 	networkRepo   repository.NetworkRepository
 	dhcpRangeRepo repository.DHCPRangeRepository
+	ipLeaseRepo   repository.IPLeaseRepository
 }
 
 // machineStoreAdapter adapts MachinesStore interface
 type machineStoreAdapter struct {
-	repo repository.MachineRepository
+	repo        repository.MachineRepository
+	ipLeaseRepo repository.IPLeaseRepository
 }
 
 func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
@@ -39,10 +41,11 @@ func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
 	var result []Machine
 	for _, m := range machines {
 		result = append(result, Machine{
-			ID:       m.ID,
-			Name:     m.Name,
-			Hostname: m.Hostname,
-			IPv4:     m.IPv4,
+			ID:        m.ID,
+			Name:      m.Name,
+			Hostname:  m.Hostname,
+			IPv4:      m.IPv4,
+			NetworkID: m.NetworkID,
 		})
 	}
 	return result, nil
@@ -51,21 +54,47 @@ func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
 func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
 	// Convert api.Machine to domain.Machine
 	domainMachine := domain.Machine{
-		ID:       m.ID,
-		Name:     m.Name,
-		Hostname: m.Hostname,
-		IPv4:     m.IPv4,
+		ID:        m.ID,
+		Name:      m.Name,
+		Hostname:  m.Hostname,
+		IPv4:      m.IPv4,
+		NetworkID: m.NetworkID,
 	}
 	saved, err := a.repo.Save(context.Background(), domainMachine)
 	if err != nil {
 		return Machine{}, err
 	}
+
+	// If network_id is provided but no IPv4, allocate IP after machine creation
+	if m.NetworkID != nil && m.IPv4 == "" {
+		lease, err := a.ipLeaseRepo.AllocateIPAddress(context.Background(), saved.ID, *m.NetworkID)
+		if err != nil {
+			// If IP allocation fails, delete the machine and return error
+			if deleteErr := a.repo.DeleteByID(context.Background(), saved.ID); deleteErr != nil {
+				fmt.Printf("Warning: failed to delete machine after IP allocation failure: %v\n", deleteErr)
+			}
+			return Machine{}, fmt.Errorf("failed to allocate IP address: %w", err)
+		}
+		// Update the machine with the allocated IP
+		saved.IPv4 = lease.IPAddress
+		updated, err := a.repo.Save(context.Background(), saved)
+		if err != nil {
+			// If update fails, deallocate the IP
+			if deallocErr := a.ipLeaseRepo.DeallocateIPAddress(context.Background(), saved.ID, *m.NetworkID); deallocErr != nil {
+				fmt.Printf("Warning: failed to deallocate IP after machine update failure: %v\n", deallocErr)
+			}
+			return Machine{}, err
+		}
+		saved = updated
+	}
+
 	// Convert back to api.Machine
 	return Machine{
-		ID:       saved.ID,
-		Name:     saved.Name,
-		Hostname: saved.Hostname,
-		IPv4:     saved.IPv4,
+		ID:        saved.ID,
+		Name:      saved.Name,
+		Hostname:  saved.Hostname,
+		IPv4:      saved.IPv4,
+		NetworkID: saved.NetworkID,
 	}, nil
 }
 
@@ -79,14 +108,33 @@ func (a *machineStoreAdapter) GetMachine(id int64) (*Machine, error) {
 	}
 	// Convert domain.Machine to api.Machine
 	return &Machine{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}, nil
 }
 
 func (a *machineStoreAdapter) DeleteMachine(id int64) error {
+	// First, get the machine to check if it has a network-allocated IP
+	machine, err := a.repo.FindByID(context.Background(), id)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil // Machine doesn't exist, consider it deleted
+		}
+		return err
+	}
+
+	// If the machine has a network_id and IPv4, deallocate the IP
+	if machine.NetworkID != nil && machine.IPv4 != "" {
+		if deallocErr := a.ipLeaseRepo.DeallocateIPAddress(context.Background(), machine.ID, *machine.NetworkID); deallocErr != nil {
+			// Log the error but don't fail the deletion
+			fmt.Printf("Warning: failed to deallocate IP for machine %d: %v\n", machine.ID, deallocErr)
+		}
+	}
+
+	// Delete the machine
 	return a.repo.DeleteByID(context.Background(), id)
 }
 
@@ -100,10 +148,11 @@ func (a *machineStoreAdapter) GetMachineByName(name string) (*Machine, error) {
 	}
 	// Convert domain.Machine to api.Machine
 	return &Machine{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}, nil
 }
 
@@ -117,11 +166,24 @@ func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	}
 	// Convert domain.Machine to api.Machine
 	return &Machine{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}, nil
+}
+
+func (a *machineStoreAdapter) AllocateIPAddress(machineID, networkID int64) (string, error) {
+	lease, err := a.ipLeaseRepo.AllocateIPAddress(context.Background(), machineID, networkID)
+	if err != nil {
+		return "", err
+	}
+	return lease.IPAddress, nil
+}
+
+func (a *machineStoreAdapter) DeallocateIPAddress(machineID, networkID int64) error {
+	return a.ipLeaseRepo.DeallocateIPAddress(context.Background(), machineID, networkID)
 }
 
 // networkStoreAdapter adapts NetworkRepository to NetworksStore interface
@@ -287,23 +349,25 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Validate required fields
-	if req.Name == "" || req.Hostname == "" || req.IPv4 == "" {
+	if req.Name == "" || req.Hostname == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Name, Hostname, and IPv4 are required"}); err != nil {
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Name and Hostname are required"}); err != nil {
 			log.Printf("failed to encode error response: %v", err)
 		}
 		return
 	}
 
-	// Validate IPv4 format
-	if net.ParseIP(req.IPv4) == nil || !isIPv4(req.IPv4) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
+	// Validate IPv4 format if provided
+	if req.IPv4 != nil && *req.IPv4 != "" {
+		if net.ParseIP(*req.IPv4) == nil || !isIPv4(*req.IPv4) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			return
 		}
-		return
 	}
 
 	// Check if machine exists
@@ -328,7 +392,9 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	// Update machine fields
 	machine.Name = req.Name
 	machine.Hostname = req.Hostname
-	machine.IPv4 = req.IPv4
+	if req.IPv4 != nil && *req.IPv4 != "" {
+		machine.IPv4 = *req.IPv4
+	}
 
 	updated, err := a.machineRepo.Save(context.Background(), machine)
 	if err != nil {
@@ -344,7 +410,7 @@ func (a *API) updateMachineHandler(w http.ResponseWriter, r *http.Request) {
 		ID:       updated.ID,
 		Name:     updated.Name,
 		Hostname: updated.Hostname,
-		IPv4:     updated.IPv4,
+		IPv4:     &updated.IPv4,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -361,6 +427,7 @@ func NewAPI(db *sql.DB) *API {
 		sshKeyRepo:    repository.NewSSHKeyRepository(db),
 		networkRepo:   repository.NewNetworkRepository(db),
 		dhcpRangeRepo: repository.NewDHCPRangeRepository(db),
+		ipLeaseRepo:   repository.NewIPLeaseRepository(db),
 	}
 }
 
@@ -375,7 +442,10 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
 
 	// Machines endpoints group
-	machineAdapter := &machineStoreAdapter{repo: a.machineRepo}
+	machineAdapter := &machineStoreAdapter{
+		repo:        a.machineRepo,
+		ipLeaseRepo: a.ipLeaseRepo,
+	}
 	machines := NewMachines(machineAdapter)
 	r.Route("/api/v0/machines", func(r chi.Router) {
 		r.Get("/", machines.ListMachinesHandler)

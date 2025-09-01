@@ -46,10 +46,24 @@ func (r *machineRepositoryImpl) createMachine(m domain.Machine) (domain.Machine,
 	if m.Hostname == "" {
 		return domain.Machine{}, fmt.Errorf("machine hostname is required")
 	}
-	if m.IPv4 == "" {
-		return domain.Machine{}, fmt.Errorf("machine IPv4 is required")
+	// IPv4 is required unless network_id is provided (for dynamic IP allocation)
+	if m.IPv4 == "" && m.NetworkID == nil {
+		return domain.Machine{}, fmt.Errorf("machine IPv4 is required when no network_id is provided")
 	}
-	res, err := r.db.Exec("INSERT INTO machines (name, hostname, ipv4) VALUES (?, ?, ?)", m.Name, m.Hostname, m.IPv4)
+
+	var res sql.Result
+	var err error
+
+	if m.NetworkID != nil {
+		// Insert with network_id
+		res, err = r.db.Exec("INSERT INTO machines (name, hostname, ipv4, network_id) VALUES (?, ?, ?, ?)",
+			m.Name, m.Hostname, m.IPv4, m.NetworkID)
+	} else {
+		// Insert without network_id
+		res, err = r.db.Exec("INSERT INTO machines (name, hostname, ipv4) VALUES (?, ?, ?)",
+			m.Name, m.Hostname, m.IPv4)
+	}
+
 	if err != nil {
 		return domain.Machine{}, fmt.Errorf("failed to create machine: %w", err)
 	}
@@ -72,10 +86,22 @@ func (r *machineRepositoryImpl) updateMachine(m domain.Machine) (domain.Machine,
 	if m.Hostname == "" {
 		return domain.Machine{}, fmt.Errorf("machine hostname is required")
 	}
-	if m.IPv4 == "" {
-		return domain.Machine{}, fmt.Errorf("machine IPv4 is required")
+	// IPv4 is required unless network_id is provided (for dynamic IP allocation)
+	if m.IPv4 == "" && m.NetworkID == nil {
+		return domain.Machine{}, fmt.Errorf("machine IPv4 is required when no network_id is provided")
 	}
-	_, err := r.db.Exec("UPDATE machines SET name = ?, hostname = ?, ipv4 = ? WHERE id = ?", m.Name, m.Hostname, m.IPv4, m.ID)
+
+	var err error
+	if m.NetworkID != nil {
+		// Update with network_id
+		_, err = r.db.Exec("UPDATE machines SET name = ?, hostname = ?, ipv4 = ?, network_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+			m.Name, m.Hostname, m.IPv4, m.NetworkID, m.ID)
+	} else {
+		// Update without network_id
+		_, err = r.db.Exec("UPDATE machines SET name = ?, hostname = ?, ipv4 = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+			m.Name, m.Hostname, m.IPv4, m.ID)
+	}
+
 	if err != nil {
 		return domain.Machine{}, fmt.Errorf("failed to update machine: %w", err)
 	}
@@ -86,19 +112,23 @@ func (r *machineRepositoryImpl) updateMachine(m domain.Machine) (domain.Machine,
 // FindByID retrieves a machine by its ID
 func (r *machineRepositoryImpl) FindByID(ctx context.Context, id int64) (domain.Machine, error) {
 	var m domain.Machine
-	err := r.db.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE id = ?", id).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
+	var networkID sql.NullInt64
+	err := r.db.QueryRow("SELECT id, name, hostname, ipv4, network_id FROM machines WHERE id = ?", id).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4, &networkID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return domain.Machine{}, fmt.Errorf("machine with ID %d: %w", id, ErrNotFound)
 		}
 		return domain.Machine{}, fmt.Errorf("failed to find machine: %w", err)
 	}
+	if networkID.Valid {
+		m.NetworkID = &networkID.Int64
+	}
 	return m, nil
 }
 
 // FindAll retrieves all machines
 func (r *machineRepositoryImpl) FindAll(ctx context.Context) ([]domain.Machine, error) {
-	rows, err := r.db.Query("SELECT id, name, hostname, ipv4 FROM machines")
+	rows, err := r.db.Query("SELECT id, name, hostname, ipv4, network_id FROM machines")
 	if err != nil {
 		return nil, fmt.Errorf("failed to list machines: %w", err)
 	}
@@ -111,8 +141,12 @@ func (r *machineRepositoryImpl) FindAll(ctx context.Context) ([]domain.Machine, 
 	var machines []domain.Machine
 	for rows.Next() {
 		var m domain.Machine
-		if err := rows.Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4); err != nil {
+		var networkID sql.NullInt64
+		if err := rows.Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4, &networkID); err != nil {
 			return nil, fmt.Errorf("failed to scan machine: %w", err)
+		}
+		if networkID.Valid {
+			m.NetworkID = &networkID.Int64
 		}
 		machines = append(machines, m)
 	}
@@ -141,12 +175,16 @@ func (r *machineRepositoryImpl) ExistsByID(ctx context.Context, id int64) (bool,
 // FindByName retrieves a machine by its name
 func (r *machineRepositoryImpl) FindByName(ctx context.Context, name string) (domain.Machine, error) {
 	var m domain.Machine
-	err := r.db.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE name = ?", name).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
+	var networkID sql.NullInt64
+	err := r.db.QueryRow("SELECT id, name, hostname, ipv4, network_id FROM machines WHERE name = ?", name).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4, &networkID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return domain.Machine{}, fmt.Errorf("machine with name %s: %w", name, ErrNotFound)
 		}
 		return domain.Machine{}, fmt.Errorf("failed to find machine by name: %w", err)
+	}
+	if networkID.Valid {
+		m.NetworkID = &networkID.Int64
 	}
 	return m, nil
 }
@@ -154,12 +192,16 @@ func (r *machineRepositoryImpl) FindByName(ctx context.Context, name string) (do
 // FindByIPv4 retrieves a machine by its IPv4 address
 func (r *machineRepositoryImpl) FindByIPv4(ctx context.Context, ipv4 string) (domain.Machine, error) {
 	var m domain.Machine
-	err := r.db.QueryRow("SELECT id, name, hostname, ipv4 FROM machines WHERE ipv4 = ?", ipv4).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4)
+	var networkID sql.NullInt64
+	err := r.db.QueryRow("SELECT id, name, hostname, ipv4, network_id FROM machines WHERE ipv4 = ?", ipv4).Scan(&m.ID, &m.Name, &m.Hostname, &m.IPv4, &networkID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return domain.Machine{}, fmt.Errorf("machine with IPv4 %s: %w", ipv4, ErrNotFound)
 		}
 		return domain.Machine{}, fmt.Errorf("failed to find machine by IPv4: %w", err)
+	}
+	if networkID.Valid {
+		m.NetworkID = &networkID.Int64
 	}
 	return m, nil
 }

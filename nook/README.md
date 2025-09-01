@@ -2,6 +2,8 @@
 
 Nook is a web service for managing metadata for cloud-init running on virtual machines.
 
+This is a CURSED experiment at using AI for software development. This code may work but I would not recommend people who are not me use it for anything important.
+
 ## Project Structure
 
 ```

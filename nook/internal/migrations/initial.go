@@ -30,6 +30,7 @@ func GetInitialMigrations() []Migration {
 						name TEXT NOT NULL UNIQUE,
 						hostname TEXT NOT NULL,
 						ipv4 TEXT NOT NULL UNIQUE,
+						network_id INTEGER,
 						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 					)
@@ -132,6 +133,48 @@ func GetInitialMigrations() []Migration {
 				return err
 			},
 		},
+		{
+			Version: 3,
+			Name:    "create_ip_address_leases_table",
+			Up: func(db *sql.DB) error {
+				// Create ip_address_leases table
+				_, err := db.Exec(`
+					CREATE TABLE ip_address_leases (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						machine_id INTEGER NOT NULL,
+						network_id INTEGER NOT NULL,
+						ip_address TEXT NOT NULL UNIQUE,
+						lease_time TEXT DEFAULT '24h',
+						created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+						FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+						FOREIGN KEY (network_id) REFERENCES networks(id) ON DELETE CASCADE,
+						UNIQUE(machine_id, network_id) -- One IP per machine per network
+					)
+				`)
+				if err != nil {
+					return err
+				}
+
+				// Create indexes for performance
+				_, err = db.Exec(`CREATE INDEX idx_ip_leases_machine_id ON ip_address_leases(machine_id)`)
+				if err != nil {
+					return err
+				}
+
+				_, err = db.Exec(`CREATE INDEX idx_ip_leases_network_id ON ip_address_leases(network_id)`)
+				if err != nil {
+					return err
+				}
+
+				_, err = db.Exec(`CREATE INDEX idx_ip_leases_ip_address ON ip_address_leases(ip_address)`)
+				return err
+			},
+			Down: func(db *sql.DB) error {
+				_, err := db.Exec(`DROP TABLE IF EXISTS ip_address_leases`)
+				return err
+			},
+		},
 	}
 }
 
@@ -190,6 +233,7 @@ func upgradeExistingTables(db *sql.DB) error {
 				name TEXT NOT NULL UNIQUE,
 				hostname TEXT NOT NULL,
 				ipv4 TEXT NOT NULL UNIQUE,
+				network_id INTEGER,
 				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 			)
@@ -283,5 +327,72 @@ func upgradeExistingTables(db *sql.DB) error {
 	}
 
 	_, err = db.Exec(`CREATE INDEX IF NOT EXISTS idx_machines_ipv4 ON machines(ipv4)`)
+	if err != nil {
+		return err
+	}
+
+	// Check if ip_address_leases table exists (for migration 3)
+	err = db.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='ip_address_leases'").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Create ip_address_leases table for existing databases
+		_, err = db.Exec(`
+			CREATE TABLE ip_address_leases (
+				id INTEGER PRIMARY KEY AUTOINCREMENT,
+				machine_id INTEGER NOT NULL,
+				network_id INTEGER NOT NULL,
+				ip_address TEXT NOT NULL UNIQUE,
+				lease_time TEXT DEFAULT '24h',
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+				FOREIGN KEY (machine_id) REFERENCES machines(id) ON DELETE CASCADE,
+				FOREIGN KEY (network_id) REFERENCES networks(id) ON DELETE CASCADE,
+				UNIQUE(machine_id, network_id)
+			)
+		`)
+		if err != nil {
+			return err
+		}
+
+		// Create indexes
+		_, err = db.Exec(`CREATE INDEX idx_ip_leases_machine_id ON ip_address_leases(machine_id)`)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`CREATE INDEX idx_ip_leases_network_id ON ip_address_leases(network_id)`)
+		if err != nil {
+			return err
+		}
+
+		_, err = db.Exec(`CREATE INDEX idx_ip_leases_ip_address ON ip_address_leases(ip_address)`)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Check if network_id column exists in machines table
+	err = db.QueryRow("SELECT COUNT(*) FROM pragma_table_info('machines') WHERE name='network_id'").Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		// Add network_id column to machines table
+		_, err = db.Exec(`ALTER TABLE machines ADD COLUMN network_id INTEGER`)
+		if err != nil {
+			return err
+		}
+
+		// Add foreign key constraint
+		_, err = db.Exec(`CREATE INDEX idx_machines_network_id ON machines(network_id)`)
+		if err != nil {
+			return err
+		}
+	}
+
 	return err
 }

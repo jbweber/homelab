@@ -223,5 +223,94 @@ echo "45. GET /api/v0/networks (should be empty)"
 curl -s -X GET http://localhost:8081/api/v0/networks
 echo -e "\n"
 
-echo "API testing complete!"
-# Cleanup will be handled automatically by the trap
+# Recreate network and DHCP range for IP allocation tests
+echo "46. POST /api/v0/networks (recreate network for IP allocation tests)"
+NETWORK_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/networks \
+  -H "Content-Type: application/json" \
+  -d '{"name": "br0", "bridge": "br0", "subnet": "192.168.1.0/24", "gateway": "192.168.1.1", "dns_servers": "8.8.8.8,1.1.1.1", "description": "Main network bridge"}')
+echo $NETWORK_RESPONSE
+
+# Extract network ID from response
+NETWORK_ID=$(echo $NETWORK_RESPONSE | grep -o '"ID":[0-9]*' | cut -d':' -f2)
+echo -e "\nRecreated network with ID: $NETWORK_ID\n"
+
+echo "47. POST /api/v0/networks/$NETWORK_ID/dhcp (create DHCP range for IP allocation tests)"
+DHCP_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/networks/$NETWORK_ID/dhcp \
+  -H "Content-Type: application/json" \
+  -d '{"StartIP": "192.168.1.100", "EndIP": "192.168.1.200", "LeaseTime": "12h"}')
+echo $DHCP_RESPONSE
+echo -e "\n"
+
+echo "48. POST /api/v0/machines (create machine with network-based IP allocation)"
+AUTO_IP_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"auto-ip-server\", \"hostname\": \"auto-host\", \"network_id\": $NETWORK_ID}")
+echo $AUTO_IP_RESPONSE
+
+# Extract auto-allocated machine ID
+AUTO_MACHINE_ID=$(echo $AUTO_IP_RESPONSE | grep -o '"id":[0-9]*' | cut -d':' -f2)
+echo -e "\nCreated machine with auto-allocated IP, ID: $AUTO_MACHINE_ID\n"
+
+echo "49. GET /api/v0/machines/$AUTO_MACHINE_ID (verify auto-allocated IP)"
+curl -s -X GET http://localhost:8081/api/v0/machines/$AUTO_MACHINE_ID
+echo -e "\n"
+
+echo "50. POST /api/v0/machines (create another machine with same network - should get different IP)"
+AUTO_IP_RESPONSE2=$(curl -s -X POST http://localhost:8081/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"auto-ip-server2\", \"hostname\": \"auto-host2\", \"network_id\": $NETWORK_ID}")
+echo $AUTO_IP_RESPONSE2
+
+# Extract second auto-allocated machine ID
+AUTO_MACHINE_ID2=$(echo $AUTO_IP_RESPONSE2 | grep -o '"id":[0-9]*' | cut -d':' -f2)
+echo -e "\nCreated second machine with auto-allocated IP, ID: $AUTO_MACHINE_ID2\n"
+
+echo "51. GET /api/v0/machines (verify both machines have different IPs)"
+curl -s -X GET http://localhost:8081/api/v0/machines
+echo -e "\n"
+
+echo "52. DELETE /api/v0/machines/$AUTO_MACHINE_ID (delete first auto-IP machine)"
+curl -s -X DELETE http://localhost:8081/api/v0/machines/$AUTO_MACHINE_ID
+echo -e "\n"
+
+echo "53. POST /api/v0/machines (create machine with invalid network_id)"
+curl -s -X POST http://localhost:8081/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d '{"name": "bad-network", "hostname": "bad-host", "network_id": 99999}'
+echo -e "\n"
+
+echo "54. POST /api/v0/machines (create machine with network_id but no DHCP range)"
+# First create a network without DHCP range
+EMPTY_NETWORK_RESPONSE=$(curl -s -X POST http://localhost:8081/api/v0/networks \
+  -H "Content-Type: application/json" \
+  -d '{"name": "empty-net", "bridge": "empty-br", "subnet": "10.0.0.0/24", "gateway": "10.0.0.1", "dns_servers": "8.8.8.8", "description": "Network without DHCP"}')
+EMPTY_NETWORK_ID=$(echo $EMPTY_NETWORK_RESPONSE | grep -o '"ID":[0-9]*' | cut -d':' -f2)
+
+curl -s -X POST http://localhost:8081/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"no-dhcp-server\", \"hostname\": \"no-dhcp-host\", \"network_id\": $EMPTY_NETWORK_ID}"
+echo -e "\n"
+
+echo "55. POST /api/v0/machines (create machine with both ipv4 and network_id - should fail)"
+curl -s -X POST http://localhost:8081/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d "{\"name\": \"conflict-server\", \"hostname\": \"conflict-host\", \"ipv4\": \"192.168.1.50\", \"network_id\": $NETWORK_ID}"
+echo -e "\n"
+
+echo "56. GET /api/v0/machines (final machine list)"
+curl -s -X GET http://localhost:8081/api/v0/machines
+echo -e "\n"
+
+echo "57. DELETE /api/v0/networks/$EMPTY_NETWORK_ID (cleanup empty network)"
+curl -s -X DELETE http://localhost:8081/api/v0/networks/$EMPTY_NETWORK_ID
+echo -e "\n"
+
+echo "58. DELETE /api/v0/networks/$NETWORK_ID (cleanup test network)"
+curl -s -X DELETE http://localhost:8081/api/v0/networks/$NETWORK_ID
+echo -e "\n"
+
+echo "59. GET /api/v0/networks (should be empty)"
+curl -s -X GET http://localhost:8081/api/v0/networks
+echo -e "\n"
+
+echo "Enhanced API testing complete with comprehensive IP allocation verification!"

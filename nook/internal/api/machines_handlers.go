@@ -13,10 +13,11 @@ import (
 
 // Machine represents a virtual machine in the system
 type Machine struct {
-	ID       int64  // Unique identifier
-	Name     string // Machine name
-	Hostname string // Hostname for NoCloud metadata
-	IPv4     string // Unique IPv4 address
+	ID        int64  // Unique identifier
+	Name      string // Machine name
+	Hostname  string // Machine hostname
+	IPv4      string // IPv4 address
+	NetworkID *int64 // Network ID for dynamic IP allocation (optional)
 }
 
 // MachinesStore defines the datastore interface for machine handlers
@@ -27,6 +28,8 @@ type MachinesStore interface {
 	DeleteMachine(id int64) error
 	GetMachineByName(name string) (*Machine, error)
 	GetMachineByIPv4(ipv4 string) (*Machine, error)
+	AllocateIPAddress(machineID, networkID int64) (string, error)
+	DeallocateIPAddress(machineID, networkID int64) error
 }
 
 // Machines groups machine handlers for testability
@@ -39,16 +42,18 @@ func NewMachines(store MachinesStore) *Machines {
 }
 
 type CreateMachineRequest struct {
-	Name     string `json:"name"`
-	Hostname string `json:"hostname"`
-	IPv4     string `json:"ipv4"`
+	Name      string  `json:"name"`
+	Hostname  string  `json:"hostname"`
+	IPv4      *string `json:"ipv4,omitempty"`       // Optional: for static IP assignment
+	NetworkID *int64  `json:"network_id,omitempty"` // Optional: if provided, allocate IP from this network
 }
 
 type MachineResponse struct {
-	ID       int64  `json:"id"`
-	Name     string `json:"name"`
-	Hostname string `json:"hostname"`
-	IPv4     string `json:"ipv4"`
+	ID        int64   `json:"id"`
+	Name      string  `json:"name"`
+	Hostname  string  `json:"hostname"`
+	IPv4      *string `json:"ipv4,omitempty"`
+	NetworkID *int64  `json:"network_id,omitempty"`
 }
 
 type ErrorResponse struct {
@@ -65,10 +70,11 @@ func (m *Machines) ListMachinesHandler(w http.ResponseWriter, r *http.Request) {
 	response := make([]MachineResponse, len(machines))
 	for i, machine := range machines {
 		response[i] = MachineResponse{
-			ID:       machine.ID,
-			Name:     machine.Name,
-			Hostname: machine.Hostname,
-			IPv4:     machine.IPv4,
+			ID:        machine.ID,
+			Name:      machine.Name,
+			Hostname:  machine.Hostname,
+			IPv4:      &machine.IPv4,
+			NetworkID: machine.NetworkID,
 		}
 	}
 
@@ -80,7 +86,13 @@ func (m *Machines) ListMachinesHandler(w http.ResponseWriter, r *http.Request) {
 
 func (m *Machines) CreateMachineHandler(w http.ResponseWriter, r *http.Request) {
 	var req CreateMachineRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	var allocatedIP string
+	var machine Machine
+	var created Machine
+	var response MachineResponse
+	var err error
+
+	if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
 		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid JSON"}); err != nil {
@@ -90,68 +102,125 @@ func (m *Machines) CreateMachineHandler(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Validate required fields
-	if req.Name == "" || req.Hostname == "" || req.IPv4 == "" {
+	if req.Name == "" || req.Hostname == "" {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Name, Hostname, and IPv4 are required"}); err != nil {
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Name and Hostname are required"}); err != nil {
 			log.Printf("failed to encode error response: %v", err)
 		}
 		fmt.Printf("[ERROR] missing required fields in machine creation: %+v\n", req)
 		return
 	}
 
-	// Validate IPv4 format
-	if net.ParseIP(req.IPv4) == nil || !isIPv4(req.IPv4) {
+	// Handle different IP assignment scenarios
+	if req.NetworkID != nil && req.IPv4 != nil {
+		// Both network_id and ipv4 provided - this is invalid
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"}); err != nil {
+		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Cannot specify both network_id and ipv4. Choose one or neither."}); err != nil {
 			log.Printf("failed to encode error response: %v", err)
 		}
-		fmt.Printf("[ERROR] invalid IPv4 address: %s\n", req.IPv4)
+		fmt.Printf("[ERROR] both network_id and ipv4 specified: %+v\n", req)
 		return
-	}
-
-	// Check for duplicate IPv4
-	existing, _ := m.store.GetMachineByIPv4(req.IPv4)
-	if existing != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusConflict)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "A machine with this IPv4 address already exists"}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
+	} else if req.NetworkID != nil {
+		// Network-based IP allocation - IP will be allocated by the store
+		machine = Machine{
+			Name:      req.Name,
+			Hostname:  req.Hostname,
+			IPv4:      "", // Will be allocated by the store
+			NetworkID: req.NetworkID,
 		}
-		fmt.Printf("[ERROR] duplicate IPv4 address: %s\n", req.IPv4)
-		return
-	}
 
-	machine := Machine{
-		Name:     req.Name,
-		Hostname: req.Hostname,
-		IPv4:     req.IPv4,
-	}
-
-	created, err := m.store.CreateMachine(machine)
-	if err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusInternalServerError)
-		if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)}); err != nil {
-			log.Printf("failed to encode error response: %v", err)
+		created, err = m.store.CreateMachine(machine)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			fmt.Printf("[ERROR] failed to create machine: %v\n", err)
+			return
 		}
-		fmt.Printf("[ERROR] failed to create machine: %v\n", err)
-		return
+	} else if req.IPv4 != nil {
+		// Static IP provided
+		allocatedIP = *req.IPv4
+		// Validate static IP format
+		if net.ParseIP(allocatedIP) == nil || !isIPv4(allocatedIP) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "Invalid IPv4 address format"}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			fmt.Printf("[ERROR] invalid IPv4 address: %s\n", allocatedIP)
+			return
+		}
+		// Check for duplicate static IP
+		existing, _ := m.store.GetMachineByIPv4(allocatedIP)
+		if existing != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusConflict)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: "A machine with this IPv4 address already exists"}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			fmt.Printf("[ERROR] duplicate IPv4 address: %s\n", allocatedIP)
+			return
+		}
+
+		// Create machine with static IP
+		machine = Machine{
+			Name:      req.Name,
+			Hostname:  req.Hostname,
+			IPv4:      allocatedIP,
+			NetworkID: nil, // Static IPs don't use networks
+		}
+
+		created, err = m.store.CreateMachine(machine)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			fmt.Printf("[ERROR] failed to create machine: %v\n", err)
+			return
+		}
+	} else {
+		// No IP assignment - create machine with empty IP
+		machine = Machine{
+			Name:      req.Name,
+			Hostname:  req.Hostname,
+			IPv4:      "",
+			NetworkID: nil,
+		}
+
+		created, err = m.store.CreateMachine(machine)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			if err := json.NewEncoder(w).Encode(ErrorResponse{Error: fmt.Sprintf("Failed to create machine: %v", err)}); err != nil {
+				log.Printf("failed to encode error response: %v", err)
+			}
+			fmt.Printf("[ERROR] failed to create machine: %v\n", err)
+			return
+		}
 	}
 
-	response := MachineResponse{
-		ID:       created.ID,
-		Name:     created.Name,
-		Hostname: created.Hostname,
-		IPv4:     created.IPv4,
+	// Prepare response
+	response = MachineResponse{
+		ID:        created.ID,
+		Name:      created.Name,
+		Hostname:  created.Hostname,
+		IPv4:      &created.IPv4,
+		NetworkID: created.NetworkID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	if err := json.NewEncoder(w).Encode(response); err != nil {
-		log.Printf("failed to encode machines response: %v", err)
+		log.Printf("failed to encode machine response: %v", err)
 	}
+
+	fmt.Printf("Created machine with ID: %d\n", created.ID)
 }
 
 func (m *Machines) GetMachineHandler(w http.ResponseWriter, r *http.Request) {
@@ -186,10 +255,11 @@ func (m *Machines) GetMachineHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := MachineResponse{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      &machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -246,10 +316,11 @@ func (m *Machines) GetMachineByNameHandler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := MachineResponse{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      &machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -281,10 +352,11 @@ func (m *Machines) GetMachineByIPv4Handler(w http.ResponseWriter, r *http.Reques
 	}
 
 	response := MachineResponse{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
+		ID:        machine.ID,
+		Name:      machine.Name,
+		Hostname:  machine.Hostname,
+		IPv4:      &machine.IPv4,
+		NetworkID: machine.NetworkID,
 	}
 
 	w.Header().Set("Content-Type", "application/json")

@@ -17,6 +17,11 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// stringPtr returns a pointer to the given string
+func stringPtr(s string) *string {
+	return &s
+}
+
 func TestGetMachineByName_MissingName(t *testing.T) {
 	r := setupTestAPI(t)
 	req := httptest.NewRequest("GET", "/api/v0/machines/name/", nil)
@@ -111,7 +116,7 @@ func TestCreateMachine(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "test-machine",
 		Hostname: "test-host",
-		IPv4:     "192.168.1.100",
+		IPv4:     stringPtr("192.168.1.100"),
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -168,7 +173,7 @@ func TestCreateMachine_InvalidIPv4(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "test-machine",
 		Hostname: "test-host",
-		IPv4:     "invalid-ip",
+		IPv4:     stringPtr("invalid-ip"),
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -212,7 +217,7 @@ func TestNoCloudUserDataHandler(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "test-machine",
 		Hostname: "test-host",
-		IPv4:     "192.0.2.1",
+		IPv4:     stringPtr("192.0.2.1"),
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -247,7 +252,7 @@ func TestNoCloudMetaDataHandler(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "test-machine",
 		Hostname: "test-host",
-		IPv4:     "192.168.1.100",
+		IPv4:     stringPtr("192.168.1.100"),
 	}
 	body, _ := json.Marshal(reqBody)
 
@@ -283,7 +288,7 @@ func TestNoCloudMetaDataHandler_XForwardedFor(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "meta-xforwarded",
 		Hostname: "meta-xhost",
-		IPv4:     "192.168.1.222",
+		IPv4:     stringPtr("192.168.1.222"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -339,7 +344,7 @@ func TestCreateMachine_DuplicateName(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "dup-machine",
 		Hostname: "dup-host",
-		IPv4:     "192.168.1.101",
+		IPv4:     stringPtr("192.168.1.101"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -373,7 +378,7 @@ func TestDeleteMachine_Success(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "delete-machine",
 		Hostname: "delete-host",
-		IPv4:     "192.168.1.180",
+		IPv4:     stringPtr("192.168.1.180"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -405,7 +410,7 @@ func TestGetMachineByName_Valid(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "find-by-name",
 		Hostname: "find-host",
-		IPv4:     "192.168.1.150",
+		IPv4:     stringPtr("192.168.1.150"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -433,7 +438,7 @@ func TestGetMachineByIPv4_Valid(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "find-by-ipv4",
 		Hostname: "find-host",
-		IPv4:     "192.168.1.151",
+		IPv4:     stringPtr("192.168.1.151"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -461,7 +466,7 @@ func TestListMachines_NonEmpty(t *testing.T) {
 	reqBody1 := CreateMachineRequest{
 		Name:     "machine1",
 		Hostname: "host1",
-		IPv4:     "192.168.1.201",
+		IPv4:     stringPtr("192.168.1.201"),
 	}
 	body1, _ := json.Marshal(reqBody1)
 	req1 := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body1))
@@ -474,7 +479,7 @@ func TestListMachines_NonEmpty(t *testing.T) {
 	reqBody2 := CreateMachineRequest{
 		Name:     "machine2",
 		Hostname: "host2",
-		IPv4:     "192.168.1.202",
+		IPv4:     stringPtr("192.168.1.202"),
 	}
 	body2, _ := json.Marshal(reqBody2)
 	req2 := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body2))
@@ -495,10 +500,10 @@ func TestListMachines_NonEmpty(t *testing.T) {
 	// Check that both expected machines are present
 	found1, found2 := false, false
 	for _, m := range response {
-		if m.Name == "machine1" && m.Hostname == "host1" && m.IPv4 == "192.168.1.201" {
+		if m.Name == "machine1" && m.Hostname == "host1" && m.IPv4 != nil && *m.IPv4 == "192.168.1.201" {
 			found1 = true
 		}
-		if m.Name == "machine2" && m.Hostname == "host2" && m.IPv4 == "192.168.1.202" {
+		if m.Name == "machine2" && m.Hostname == "host2" && m.IPv4 != nil && *m.IPv4 == "192.168.1.202" {
 			found2 = true
 		}
 	}
@@ -512,7 +517,7 @@ func TestGetMachineHandler_Valid(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "get-machine",
 		Hostname: "get-host",
-		IPv4:     "192.168.1.210",
+		IPv4:     stringPtr("192.168.1.210"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -554,7 +559,7 @@ func TestUpdateMachineHandler_Success(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "update-machine",
 		Hostname: "update-host",
-		IPv4:     "192.168.1.160",
+		IPv4:     stringPtr("192.168.1.160"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -570,7 +575,7 @@ func TestUpdateMachineHandler_Success(t *testing.T) {
 	updateBody := CreateMachineRequest{
 		Name:     "updated-machine",
 		Hostname: "updated-host",
-		IPv4:     "192.168.1.161",
+		IPv4:     stringPtr("192.168.1.161"),
 	}
 	updateJSON, _ := json.Marshal(updateBody)
 	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), bytes.NewReader(updateJSON))
@@ -591,7 +596,7 @@ func TestUpdateMachineHandler_InvalidID(t *testing.T) {
 	updateBody := CreateMachineRequest{
 		Name:     "updated-machine",
 		Hostname: "updated-host",
-		IPv4:     "192.168.1.161",
+		IPv4:     stringPtr("192.168.1.161"),
 	}
 	updateJSON, _ := json.Marshal(updateBody)
 	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/invalid", bytes.NewReader(updateJSON))
@@ -618,7 +623,7 @@ func TestUpdateMachineHandler_InvalidIPv4(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "update-machine",
 		Hostname: "update-host",
-		IPv4:     "192.168.1.160",
+		IPv4:     stringPtr("192.168.1.160"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -634,7 +639,7 @@ func TestUpdateMachineHandler_InvalidIPv4(t *testing.T) {
 	updateBody := CreateMachineRequest{
 		Name:     "updated-machine",
 		Hostname: "updated-host",
-		IPv4:     "invalid-ip",
+		IPv4:     stringPtr("invalid-ip"),
 	}
 	updateJSON, _ := json.Marshal(updateBody)
 	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), bytes.NewReader(updateJSON))
@@ -651,7 +656,7 @@ func TestUpdateMachineHandler_MissingFields(t *testing.T) {
 	reqBody := CreateMachineRequest{
 		Name:     "update-machine",
 		Hostname: "update-host",
-		IPv4:     "192.168.1.160",
+		IPv4:     stringPtr("192.168.1.160"),
 	}
 	body, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
@@ -677,7 +682,7 @@ func TestUpdateMachineHandler_NotFound(t *testing.T) {
 	updateBody := CreateMachineRequest{
 		Name:     "updated-machine",
 		Hostname: "updated-host",
-		IPv4:     "192.168.1.161",
+		IPv4:     stringPtr("192.168.1.161"),
 	}
 	updateJSON, _ := json.Marshal(updateBody)
 	patchReq := httptest.NewRequest("PATCH", "/api/v0/machines/99999", bytes.NewReader(updateJSON))
