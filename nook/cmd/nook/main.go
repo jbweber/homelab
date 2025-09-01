@@ -10,6 +10,9 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -24,10 +27,19 @@ func main() {
 		Use:   "nook",
 		Short: "Nook is a metadata service for cloud-init",
 		Long:  `Nook provides metadata endpoints for cloud-init and allows management of machines, networks, and SSH keys.`,
+	}
+
+	var serverCmd = &cobra.Command{
+		Use:   "server",
+		Short: "Start the nook web service",
 		Run: func(cmd *cobra.Command, args []string) {
-			runServer()
+			dbPath, _ := cmd.Flags().GetString("db-path")
+			port, _ := cmd.Flags().GetString("port")
+			runServer(dbPath, port)
 		},
 	}
+	serverCmd.Flags().String("db-path", "~/nook/data/nook.db", "Path to the database file")
+	serverCmd.Flags().String("port", "8080", "Port to run the server on")
 
 	var addCmd = &cobra.Command{
 		Use:   "add",
@@ -138,6 +150,7 @@ func main() {
 	deleteCmd.AddCommand(deleteMachineCmd)
 	deleteCmd.AddCommand(deleteNetworkCmd)
 	deleteCmd.AddCommand(deleteSSHKeyCmd)
+	rootCmd.AddCommand(serverCmd)
 	rootCmd.AddCommand(addCmd)
 	rootCmd.AddCommand(deleteCmd)
 
@@ -146,9 +159,9 @@ func main() {
 	}
 }
 
-func runServer() {
+func runServer(dbPath, port string) {
 	// Initialize database
-	db, err := initializeDatabase("nook.db")
+	db, err := initializeDatabase(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
@@ -169,8 +182,8 @@ func runServer() {
 		}
 	})
 
-	fmt.Println("Starting Nook web service on :8080...")
-	err = http.ListenAndServe(":8080", r)
+	fmt.Printf("Starting Nook web service on :%s...\n", port)
+	err = http.ListenAndServe(":"+port, r)
 	if err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
@@ -292,6 +305,15 @@ func deleteSSHKey(id int64) {
 
 // initializeDatabase creates a new SQLite database and runs migrations.
 func initializeDatabase(path string) (*sql.DB, error) {
+	// Expand ~ to home directory
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		path = filepath.Join(homeDir, path[2:])
+	}
+
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		return nil, err

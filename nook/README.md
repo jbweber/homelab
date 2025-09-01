@@ -6,13 +6,20 @@ Nook is a web service for managing metadata for cloud-init running on virtual ma
 
 ```
 nook/
-├── cmd/nook/          # Main application entry point
+├── cmd/nook/              # Main application entry point
 ├── internal/
-│   ├── api/          # HTTP API handlers
-│   └── datastore/    # Database operations
+│   ├── api/              # HTTP API handlers
+│   ├── domain/           # Domain models
+│   ├── repository/       # Data access layer
+│   ├── migrations/       # Database migrations
+│   └── testutil/         # Testing utilities
+├── testing/
+│   └── nook.service      # Systemd user service file
 ├── go.mod
 ├── go.sum
-└── Makefile          # Build and test automation
+├── Makefile              # Build and test automation
+├── test_api.sh           # Integration test script
+└── README.md
 ```
 
 ## Quick Start
@@ -25,7 +32,7 @@ nook/
 ### Building
 
 ```bash
-# Build the binary
+# Build the binary (copies to ~/nook/bin/)
 make build
 
 # Build for Linux (cross-compilation)
@@ -34,12 +41,29 @@ make build-linux
 
 ### Running
 
+#### Development Mode
 ```bash
-# Run directly
+# Run directly with default settings
 make run
 
-# Or build and run
-make build && ./nook
+# Or build and run with custom settings
+make build && ./nook server --db-path ./nook.db --port 8080
+```
+
+#### Production Mode (Systemd User Service)
+```bash
+# Copy service file and start
+mkdir -p ~/.config/systemd/user
+cp testing/nook.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable nook
+systemctl --user start nook
+
+# Check status
+systemctl --user status nook
+
+# View logs
+journalctl --user -u nook -f
 ```
 
 ### Testing
@@ -47,7 +71,19 @@ make build && ./nook
 ```bash
 # Run all tests
 make test
+
+# Run integration tests (starts/stops server automatically)
+./test_api.sh
+
 # Run tests with coverage validation (requires 80% coverage)
+make test-coverage-validate
+
+# Run tests with race detection
+make test-race
+
+# Show coverage in terminal
+make coverage-func
+```
 make test-coverage-validate
 
 # Run tests with race detection
@@ -61,50 +97,109 @@ make coverage-func
 
 Nook has been successfully tested with real VMs using libvirt and Fedora UKI images. This setup validates the cloud-init integration and metadata delivery.
 
+#### Production Deployment Structure
+```
+~/nook/
+├── bin/
+│   └── nook          # Production binary (auto-deployed by make build)
+└── data/
+    └── nook.db       # Production database
+```
+
 #### Setup Overview
 - **VM Image**: Fedora Cloud Base UKI (Unified Kernel Image) for UEFI boot
 - **Network**: Bridge interface with dnsmasq for DHCP and DNS
-- **Metadata Source**: Nook running on host at `http://10.37.37.2:8080`
+- **Metadata Source**: Nook running via systemd user service on port 8080
 - **Configuration**: Dynamic user-data with hostname and SSH keys per VM
 
 #### Key Components
-- **Systemd Service**: User service for easy management (`systemctl --user restart nook`)
+- **Systemd User Service**: Automatic management (`systemctl --user restart nook`)
 - **Dynamic User-Data**: Serves customized cloud-config based on VM IP
-- **Logging**: Detailed request logging for debugging
+- **Logging**: Detailed request logging via `journalctl --user -u nook`
 - **DHCP**: dnsmasq provides static IPs and gateway/DNS options
+- **Test Isolation**: Separate test database and port (8081) for development
 
-#### Testing Steps
-1. Configure dnsmasq on bridge for DHCP with static leases
-2. Add VM to nook database with expected IP
-3. Add SSH keys to VM in nook
-4. Define and start VM with nocloud datasource
-5. VM boots, fetches metadata, sets hostname, installs SSH keys
+#### Deployment Steps
+1. **Build and Deploy:**
+   ```bash
+   make build  # Builds and copies binary to ~/nook/bin/
+   ```
+
+2. **Setup Systemd Service:**
+   ```bash
+   cp testing/nook.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   systemctl --user enable nook
+   systemctl --user start nook
+   ```
+
+3. **Configure dnsmasq** on bridge for DHCP with static leases
+
+4. **Add VM to nook database:**
+   ```bash
+   curl -X POST http://localhost:8080/api/v0/machines \
+     -H "Content-Type: application/json" \
+     -d '{"name":"test-vm","hostname":"test.example.com","ipv4":"10.37.37.100"}'
+   ```
+
+5. **Add SSH keys to VM:**
+   ```bash
+   # Add SSH key via API
+   curl -X POST http://localhost:8080/api/v0/ssh-keys \
+     -H "Content-Type: application/json" \
+     -d '{"machine_id":1,"key_text":"ssh-rsa AAAAB3NzaC1yc2E..."}'
+   ```
+
+6. **Define and start VM** with nocloud datasource pointing to nook
 
 #### Verified Endpoints
-- `/meta-data`: Instance metadata (YAML)
+- `/meta-data`: Instance metadata (YAML format)
 - `/user-data`: Cloud-config with SSH keys and hostname
 - `/vendor-data`: Empty (optional)
+- `/api/v0/machines`: Machine management API
+- `/api/v0/ssh-keys`: SSH key management API
+
+#### Testing Commands
+```bash
+# Test production service
+curl http://localhost:8080/
+curl -H "X-Forwarded-For: 10.37.37.100" http://localhost:8080/meta-data
+
+# Test development version (isolated)
+./test_api.sh
+
+# Check service status
+systemctl --user status nook
+journalctl --user -u nook -f
+```
 
 #### Files
-- `nook/testing/nook.service`: Systemd user service file
-- `.gitignore`: Excludes test files from repo
+- `testing/nook.service`: Systemd user service configuration
+- `test_api.sh`: Integration test script with automatic cleanup
+- `.gitignore`: Excludes test files (`test_nook.db`, etc.)
 
 ### Coverage
 
 Current test coverage: **75.6%** (api package), **62.5%** (datastore package)
 
-**Recent Improvements (August 2025):**
-- SSH key handlers coverage significantly improved:
-  - `PublicKeysHandler`: 95.5%
-  - `PublicKeyByIdxHandler`: 96.6%
-  - `PublicKeyOpenSSHHandler`: 82.8%
-- Added comprehensive error branch tests for malformed remote addresses, database errors, and invalid inputs
-- Coverage threshold: 80% (enforced in CI via `make test-coverage-validate`)
+**Recent Improvements (September 2025):**
+- **Streamlined codebase**: Removed unused EC2-style endpoints for nocloud compatibility
+- **Enhanced test script**: `test_api.sh` with automatic cleanup and process management
+- **Systemd integration**: Production deployment with user service management
+- **Database isolation**: Separate test and production databases
+- **Build automation**: Auto-deployment to `~/nook/bin/` on build
 
-**Remaining Gaps:**
-- Datastore package: Focus on `ListAllSSHKeys` (0% coverage) and other CRUD operations
-- API handlers: Some edge cases in metadata and network handlers
-- Integration test coverage for real database scenarios
+**Coverage Focus Areas:**
+- API handlers: Core cloud-init endpoints (`/meta-data`, `/user-data`, `/vendor-data`)
+- Machine and SSH key management APIs
+- Error handling for malformed requests and database errors
+- Integration tests with real database scenarios
+
+**Test Infrastructure:**
+- **Unit Tests**: Comprehensive coverage of individual components
+- **Integration Tests**: `test_api.sh` validates full API workflow
+- **Process Management**: Automatic server lifecycle management in tests
+- **Database Cleanup**: Test databases removed after execution
 
 ### Development
 
@@ -147,177 +242,133 @@ make clean
 
 ## API Endpoints
 
+The service provides the following endpoints for cloud-init metadata and management:
 
-The service provides the following endpoints for cloud-init metadata:
+### Cloud-Init Metadata Endpoints
 
-### PATCH /api/v0/machines/{id}
-
-Update an existing machine's details.
+#### GET /meta-data
+Returns instance metadata in cloud-init format.
 
 **Request:**
-
 ```
-PATCH /api/v0/machines/{id}
-Content-Type: application/json
+GET /meta-data
+X-Forwarded-For: <client-ip>
+```
 
+**Response (200 OK):**
+```yaml
+instance-id: iid-00000001
+hostname: my-host
+local-hostname: my-host
+local-ipv4: 192.168.1.100
+public-hostname: my-host
+security-groups: default
+```
+
+#### GET /user-data
+Returns user-data in cloud-config format with SSH keys and hostname.
+
+**Request:**
+```
+GET /user-data
+X-Forwarded-For: <client-ip>
+```
+
+**Response (200 OK):**
+```yaml
+#cloud-config
+hostname: my-host
+manage_etc_hosts: true
+ssh_authorized_keys:
+  - ssh-rsa AAAAB3NzaC1yc2E...
+```
+
+#### GET /vendor-data
+Returns vendor-data (currently empty for nocloud compatibility).
+
+**Request:**
+```
+GET /vendor-data
+```
+
+**Response (200 OK):**
+```yaml
+# Empty vendor data
+```
+
+### Management API Endpoints
+
+#### GET /api/v0/machines
+List all machines.
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 1,
+    "name": "web-server",
+    "hostname": "web.example.com",
+    "ipv4": "192.168.1.100"
+  }
+]
+```
+
+#### POST /api/v0/machines
+Create a new machine.
+
+**Request:**
+```json
 {
-	"name": "new-name",
-	"hostname": "new-hostname",
-	"ipv4": "192.168.1.123"
+  "name": "new-server",
+  "hostname": "new.example.com",
+  "ipv4": "192.168.1.101"
 }
 ```
 
-**Response (200 OK):**
+#### GET /api/v0/machines/{id}
+Get a specific machine by ID.
 
-```
+#### PATCH /api/v0/machines/{id}
+Update an existing machine.
+
+**Request:**
+```json
 {
-	"id": 1,
-	"name": "new-name",
-	"hostname": "new-hostname",
-	"ipv4": "192.168.1.123"
+  "name": "updated-name",
+  "hostname": "updated.example.com",
+  "ipv4": "192.168.1.102"
 }
 ```
 
-**Error Responses:**
+#### DELETE /api/v0/machines/{id}
+Delete a machine.
 
-- `400 Bad Request`: Invalid ID, missing fields, or invalid JSON/IP format
-- `404 Not Found`: Machine not found
-- `500 Internal Server Error`: Database or update error
+#### GET /api/v0/ssh-keys
+List all SSH keys.
 
-**Example:**
-
-```bash
-curl -X PATCH http://localhost:8080/api/v0/machines/1 \
-	-H "Content-Type: application/json" \
-	-d '{"name":"new-name","hostname":"new-hostname","ipv4":"192.168.1.123"}'
-```
-
----
-
-
-### GET /2021-01-03/meta-data/public-keys
-
-Returns a list of SSH public keys for the requesting machine in cloud-init format (one key per line).
+#### POST /api/v0/ssh-keys
+Add an SSH key to a machine.
 
 **Request:**
+```json
+{
+  "machine_id": 1,
+  "key_text": "ssh-rsa AAAAB3NzaC1yc2E..."
+}
+```
 
-```
-GET /2021-01-03/meta-data/public-keys
-Header: X-Forwarded-For: <machine-ip>
-```
+#### DELETE /api/v0/ssh-keys/{id}
+Delete an SSH key.
+
+### Health Check
+
+#### GET /
+Basic health check endpoint.
 
 **Response (200 OK):**
-
-Content-Type: text/plain
-
 ```
-ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCtestkey1
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2
+Nook web service is running!
 ```
-
-**Error Responses:**
-
-- `404 Not Found`: Machine not found for IP
-- `500 Internal Server Error`: Datastore error
-
-**Example:**
-
-```bash
-curl -H "X-Forwarded-For: 192.168.1.170" http://localhost:8080/2021-01-03/meta-data/public-keys
-```
-
----
-
-### GET /2021-01-03/meta-data/public-keys/{idx}
-
-Returns the SSH public key at the specified index for the requesting machine.
-
-**Request:**
-
-```
-GET /2021-01-03/meta-data/public-keys/{idx}
-Header: X-Forwarded-For: <machine-ip>
-```
-
-**Response (200 OK):**
-
-Content-Type: text/plain
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2
-```
-
-**Error Responses:**
-
-- `400 Bad Request`: Invalid index
-- `404 Not Found`: Machine not found for IP, or key index out of range
-- `500 Internal Server Error`: Datastore error
-
-**Example:**
-
-```bash
-curl -H "X-Forwarded-For: 192.168.1.170" http://localhost:8080/2021-01-03/meta-data/public-keys/1
-```
-
----
-
-### GET /2021-01-03/meta-data/public-keys/{idx}/openssh-key
-
-Returns the OpenSSH-formatted public key at the specified index for the requesting machine.
-
-**Request:**
-
-```
-GET /2021-01-03/meta-data/public-keys/{idx}/openssh-key
-Header: X-Forwarded-For: <machine-ip>
-```
-
-**Response (200 OK):**
-
-Content-Type: text/plain
-
-```
-ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2
-```
-
-**Error Responses:**
-
-- `400 Bad Request`: Invalid index
-- `404 Not Found`: Machine not found for IP, or key index out of range
-- `500 Internal Server Error`: Datastore error
-
-**Example:**
-
-```bash
-curl -H "X-Forwarded-For: 192.168.1.170" http://localhost:8080/2021-01-03/meta-data/public-keys/1/openssh-key
-```
-
-
----
-
-### Skipped Endpoint: /latest/api/token
-
-The `/latest/api/token` endpoint (used for IMDSv2 session tokens in AWS EC2) is intentionally skipped in this implementation. It is not required for NoCloud compatibility, but may be added in the future to support enhanced metadata security and compatibility with cloud-init clients expecting IMDSv2.
-
-If you need IMDSv2-style session tokens, see [AWS IMDSv2 documentation](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/configuring-instance-metadata-service.html) for details. For now, all metadata endpoints are accessible without a session token.
-
----
-
-Endpoints:
-
-- `/2021-01-03/dynamic/instance-identity/document`
-- `/2021-01-03/meta-data/public-keys/<int:idx>`
-- `/2021-01-03/meta-data/public-keys/<int:idx}/openssh-key`
-- `/meta-data`
-- `/user-data`
-- `/vendor-data`
-- `/api/v0/machines`
-- `/api/v0/networks`
-
-### Skipped: /api/v0/networks
-
-The `/api/v0/networks` endpoint is currently a placeholder and does not return real network data. This endpoint is complex and will be revisited in the future to provide actual network configuration and metadata. For now, it is intentionally skipped and documented as such.
-- `/api/v0/ssh-keys`
 
 ## Database
 

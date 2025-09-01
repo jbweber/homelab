@@ -2,8 +2,8 @@
 Description=Nook metadata service
 
 [Service]
-ExecStart=/home/jweber/homelab/nook/nook
-WorkingDirectory=/home/jweber/homelab/nook
+ExecStart=/home/jweber/nook/bin/nook server --db-path /home/jweber/nook/data/nook.db --port 8080
+WorkingDirectory=/home/jweber/nook
 Restart=always
 
 [Install]

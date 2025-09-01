@@ -35,4 +35,5 @@ node_modules/
 *.pem
 
 # Test files
-libvirt_test/*
+libvirt_test/
+test_nook.db

@@ -24,6 +24,8 @@ COVERAGE_THRESHOLD=55
 .PHONY: build
 build:
 	$(GOBUILD) -o $(BINARY_NAME) -v $(MAIN_PACKAGE)
+	mkdir -p ~/nook/bin
+	cp $(BINARY_NAME) ~/nook/bin/
 
 # Build for Linux
 .PHONY: build-linux
@@ -76,6 +78,7 @@ clean:
 	rm -f $(BINARY_UNIX)
 	rm -f $(COVERAGE_FILE)
 	rm -f $(COVERAGE_HTML)
+	rm -f test_nook.db
 
 # Run
 .PHONY: run

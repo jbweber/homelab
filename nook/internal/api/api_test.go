@@ -323,8 +323,6 @@ func TestNetworksHandler(t *testing.T) {
 	// Optionally check body if expected
 }
 
-
-
 func TestNoCloudMetaDataHandler_MalformedRemoteAddr(t *testing.T) {
 	r := setupTestAPI(t)
 	req := httptest.NewRequest("GET", "/meta-data", nil)
@@ -538,12 +536,6 @@ func TestGetMachineHandler_Valid(t *testing.T) {
 	assert.Equal(t, reqBody.Hostname, resp.Hostname)
 	assert.Equal(t, reqBody.IPv4, resp.IPv4)
 }
-
-
-
-
-
-
 
 // End of Tests
 func TestNetworksHandler_Placeholder(t *testing.T) {
