@@ -63,7 +63,7 @@ func (a *testSSHKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make([]SSHKey, len(keys))
 	for i, key := range keys {
 		result[i] = SSHKey{
@@ -81,7 +81,7 @@ func (a *testSSHKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) 
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Machine{
 		ID:       machine.ID,
 		Name:     machine.Name,
@@ -96,7 +96,7 @@ func (a *testSSHKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	result := make([]SSHKey, len(keys))
 	for i, key := range keys {
 		result[i] = SSHKey{
@@ -113,7 +113,7 @@ func setupSSHKeysTestAPI(t *testing.T) (*chi.Mux, *sql.DB) {
 	// Create test database
 	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeys"))
 	require.NoError(t, err)
-	
+
 	// Run migrations
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,7 +134,7 @@ func setupSSHKeysTestAPI(t *testing.T) (*chi.Mux, *sql.DB) {
 	r := chi.NewRouter()
 	api := NewAPI(db)
 	api.RegisterRoutes(r)
-	
+
 	return r, db
 }
 
@@ -158,11 +158,11 @@ func TestSSHKeysHandler_Placeholder(t *testing.T) {
 
 func TestPublicKeysHandler_Success(t *testing.T) {
 	r, db := setupSSHKeysTestAPI(t)
-	
+
 	// Create repositories for test data setup
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ctx := context.Background()
-	
+
 	// Create a machine
 	reqBody := CreateMachineRequest{
 		Name:     "ssh-machine",
@@ -186,7 +186,7 @@ func TestPublicKeysHandler_Success(t *testing.T) {
 	}
 	_, err := sshKeyRepo.Save(ctx, key)
 	require.NoError(t, err)
-	
+
 	key2 := domain.SSHKey{
 		MachineID: created.ID,
 		KeyText:   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItestkey2",
@@ -265,7 +265,7 @@ func TestPublicKeysHandler_GetMachineError(t *testing.T) {
 
 func TestPublicKeyByIdxHandler_Success(t *testing.T) {
 	r, db := setupSSHKeysTestAPI(t)
-	
+
 	// Create repositories for test data setup
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ctx := context.Background()
@@ -291,7 +291,7 @@ func TestPublicKeyByIdxHandler_Success(t *testing.T) {
 	}
 	_, err := sshKeyRepo.Save(ctx, key1)
 	require.NoError(t, err)
-	
+
 	key2 := domain.SSHKey{
 		MachineID: created.ID,
 		KeyText:   "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIidxkey2",
@@ -392,7 +392,7 @@ func TestPublicKeyByIdxHandler_ListSSHKeysError(t *testing.T) {
 
 func TestPublicKeyOpenSSHHandler_Success(t *testing.T) {
 	r, db := setupSSHKeysTestAPI(t)
-	
+
 	// Create repositories for test data setup
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ctx := context.Background()

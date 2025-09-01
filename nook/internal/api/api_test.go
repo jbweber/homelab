@@ -78,7 +78,7 @@ func setupTestAPI(t *testing.T) *chi.Mux {
 	// Create test database
 	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestAPI"))
 	require.NoError(t, err)
-	
+
 	// Run migrations
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
