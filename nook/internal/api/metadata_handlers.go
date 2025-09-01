@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -28,28 +29,39 @@ func NewMetaData(store MetaDataStore) *MetaData {
 func (m *MetaData) NoCloudMetaDataHandler(w http.ResponseWriter, r *http.Request) {
 	ip, err := extractClientIP(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("failed to extract client IP: %v", err)
+		http.Error(w, "unable to determine client IP address", http.StatusBadRequest)
+		return
+	}
+
+	// Validate IP format
+	if net.ParseIP(ip) == nil {
+		log.Printf("invalid IP address format: %s", ip)
+		http.Error(w, "invalid IP address format", http.StatusBadRequest)
 		return
 	}
 
 	machine, err := m.store.GetMachineByIPv4(ip)
 	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
+		log.Printf("failed to lookup machine by IP %s: %v", ip, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
+		log.Printf("machine not found for IP: %s", ip)
+		http.Error(w, "machine not found", http.StatusNotFound)
 		return
 	}
 
 	instanceID := fmt.Sprintf("iid-%08d", machine.ID)
-	meta := fmt.Sprintf(
-		"instance-id: %s\n"+
-			"hostname: %s\n"+
-			"local-hostname: %s\n"+
-			"local-ipv4: %s\n"+
-			"public-hostname: %s\n"+
-			"security-groups: default\n",
+	// Use proper YAML format for NoCloud compatibility
+	meta := fmt.Sprintf(`instance-id: %s
+hostname: %s
+local-hostname: %s
+local-ipv4: %s
+public-hostname: %s
+security-groups: default
+`,
 		instanceID,
 		machine.Hostname,
 		machine.Hostname,
@@ -57,40 +69,62 @@ func (m *MetaData) NoCloudMetaDataHandler(w http.ResponseWriter, r *http.Request
 		machine.Hostname,
 	)
 
-	w.Header().Set("Content-Type", "text/yaml")
+	w.Header().Set("Content-Type", "text/yaml; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(meta)); err != nil {
-		log.Printf("failed to write meta-data: %v", err)
+		log.Printf("failed to write meta-data response: %v", err)
 	}
 }
 
 // MetaDataDirectoryHandler serves a directory listing for /meta-data/ (refactored for MetaData).
 func (m *MetaData) MetaDataDirectoryHandler(w http.ResponseWriter, r *http.Request) {
-	// For now, serve a static directory listing
-	dir := "instance-id\nhostname\nlocal-hostname\nlocal-ipv4\npublic-hostname\nsecurity-groups\n"
-	w.Header().Set("Content-Type", "text/plain")
+	// NoCloud metadata directory listing
+	dir := `instance-id
+hostname
+local-hostname
+local-ipv4
+public-hostname
+security-groups
+`
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(dir)); err != nil {
-		log.Printf("failed to write meta-data directory: %v", err)
+		log.Printf("failed to write meta-data directory response: %v", err)
 	}
 }
 
 // MetaDataKeyHandler serves individual metadata keys for /meta-data/{key} (refactored for MetaData).
 func (m *MetaData) MetaDataKeyHandler(w http.ResponseWriter, r *http.Request) {
 	key := chi.URLParam(r, "key")
+	if key == "" {
+		log.Printf("empty metadata key requested")
+		http.Error(w, "metadata key is required", http.StatusBadRequest)
+		return
+	}
+
 	ip, err := extractClientIP(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Printf("failed to extract client IP for key %s: %v", key, err)
+		http.Error(w, "unable to determine client IP address", http.StatusBadRequest)
+		return
+	}
+
+	// Validate IP format
+	if net.ParseIP(ip) == nil {
+		log.Printf("invalid IP address format for key %s: %s", key, ip)
+		http.Error(w, "invalid IP address format", http.StatusBadRequest)
 		return
 	}
 
 	machine, err := m.store.GetMachineByIPv4(ip)
 	if err != nil {
-		http.Error(w, "failed to lookup machine by IP", http.StatusInternalServerError)
+		log.Printf("failed to lookup machine by IP %s for key %s: %v", ip, key, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	if machine == nil {
-		http.Error(w, "machine not found for IP", http.StatusNotFound)
+		log.Printf("machine not found for IP %s requesting key %s", ip, key)
+		http.Error(w, "machine not found", http.StatusNotFound)
 		return
 	}
 
@@ -105,13 +139,14 @@ func (m *MetaData) MetaDataKeyHandler(w http.ResponseWriter, r *http.Request) {
 	case "security-groups":
 		value = "default"
 	default:
+		log.Printf("unknown metadata key requested: %s", key)
 		http.Error(w, "unknown metadata key", http.StatusNotFound)
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(value + "\n")); err != nil {
-		log.Printf("failed to write meta-data key: %v", err)
+		log.Printf("failed to write meta-data key %s response: %v", key, err)
 	}
 }

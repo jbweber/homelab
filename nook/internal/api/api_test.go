@@ -276,7 +276,7 @@ func TestNoCloudMetaDataHandler_IPNotFound(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "machine not found for IP")
+	assert.Contains(t, w.Body.String(), "machine not found")
 }
 
 func TestNoCloudMetaDataHandler_XForwardedFor(t *testing.T) {
@@ -307,14 +307,13 @@ func TestNoCloudMetaDataHandler_XForwardedFor(t *testing.T) {
 
 func TestNoCloudMetaDataHandler_LookupError(t *testing.T) {
 	r := setupTestAPI(t)
-	// Simulate a lookup error by passing an invalid IP format
+	// Simulate an invalid IP format - should return 400 Bad Request due to IP validation
 	req := httptest.NewRequest("GET", "/meta-data", nil)
 	req.Header.Set("X-Forwarded-For", "invalid-ip")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	// Should be 404 due to not found
-	assert.Equal(t, http.StatusNotFound, w.Code)
-	assert.Contains(t, w.Body.String(), "machine not found for IP")
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid IP address format")
 }
 
 func TestNetworksHandler(t *testing.T) {
@@ -377,7 +376,7 @@ func TestNoCloudMetaDataHandler_MalformedRemoteAddr(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-	assert.Contains(t, w.Body.String(), "unable to parse remote address")
+	assert.Contains(t, w.Body.String(), "unable to determine client IP address")
 }
 
 func TestCreateMachine_DuplicateName(t *testing.T) {
