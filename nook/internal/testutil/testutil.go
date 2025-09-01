@@ -22,6 +22,16 @@ func CleanupTestDB(dsn string) error {
 		path = path[:idx]
 	}
 
+	// Skip cleanup for in-memory databases
+	if path == ":memory:" || strings.Contains(dsn, "mode=memory") {
+		return nil
+	}
+
+	// Only attempt to remove if the file exists
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil // File doesn't exist, nothing to clean up
+	}
+
 	return os.Remove(path)
 }
 

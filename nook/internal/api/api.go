@@ -372,7 +372,6 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	RegisterSSHKeysRoutes(r, sshKeysAdapter)
 }
 func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
-	log.Printf("[DEBUG] noCloudUserDataHandler called")
 	ip, err := extractClientIP(r)
 	if err != nil {
 		log.Printf("failed to extract client IP: %v", err)
@@ -420,7 +419,6 @@ manage_etc_hosts: true
 		}
 	}
 
-	log.Printf("Serving user-data for machine %s (IP: %s), keys count: %d", machine.Name, ip, len(keys))
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(userData)); err != nil {
