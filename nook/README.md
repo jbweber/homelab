@@ -190,12 +190,19 @@ Current test coverage: **75.6%** (api package), **62.5%** (datastore package)
 - **Systemd integration**: Production deployment with user service management
 - **Database isolation**: Separate test and production databases
 - **Build automation**: Auto-deployment to `~/nook/bin/` on build
+- **Network management**: Complete network and IP allocation system
+- **IP lease management**: Conflict detection and automatic allocation
+- **VM provisioning automation**: Scripts for streamlined VM setup
+- **SSH key integration**: Seamless cloud-init user-data injection
 
 **Coverage Focus Areas:**
 - API handlers: Core cloud-init endpoints (`/meta-data`, `/user-data`, `/vendor-data`)
 - Machine and SSH key management APIs
+- Network management and IP allocation APIs
 - Error handling for malformed requests and database errors
 - Integration tests with real database scenarios
+- IP conflict detection and lease management
+- Automation script validation
 
 **Test Infrastructure:**
 - **Unit Tests**: Comprehensive coverage of individual components
@@ -327,23 +334,61 @@ Create a new machine.
 }
 ```
 
-#### GET /api/v0/machines/{id}
-Get a specific machine by ID.
+#### GET /api/v0/networks
+List all networks.
 
-#### PATCH /api/v0/machines/{id}
-Update an existing machine.
+**Response (200 OK):**
+```json
+[
+  {
+    "id": 1,
+    "name": "virt-net",
+    "bridge": "virt",
+    "subnet": "10.37.37.0/24",
+    "gateway": "10.37.37.1"
+  }
+]
+```
+
+#### POST /api/v0/networks
+Create a new network.
 
 **Request:**
 ```json
 {
-  "name": "updated-name",
-  "hostname": "updated.example.com",
-  "ipv4": "192.168.1.102"
+  "name": "virt-net",
+  "bridge": "virt",
+  "subnet": "10.37.37.0/24",
+  "gateway": "10.37.37.1"
 }
 ```
 
-#### DELETE /api/v0/machines/{id}
-Delete a machine.
+#### GET /api/v0/networks/{id}
+Get a specific network by ID.
+
+#### PATCH /api/v0/networks/{id}
+Update an existing network.
+
+#### DELETE /api/v0/networks/{id}
+Delete a network.
+
+#### POST /api/v0/networks/{id}/dhcp
+Add a DHCP range to a network.
+
+**Request:**
+```json
+{
+  "StartIP": "10.37.37.100",
+  "EndIP": "10.37.37.200",
+  "LeaseTime": "12h"
+}
+```
+
+#### GET /api/v0/networks/{id}/dhcp
+Get DHCP ranges for a network.
+
+#### DELETE /api/v0/networks/{id}/dhcp/{rangeId}
+Delete a DHCP range.
 
 #### GET /api/v0/ssh-keys
 List all SSH keys.
@@ -362,7 +407,67 @@ Add an SSH key to a machine.
 #### DELETE /api/v0/ssh-keys/{id}
 Delete an SSH key.
 
-### Health Check
+### Network Management API Endpoints
+
+#### GET /api/v0/networks
+List all networks.
+
+#### POST /api/v0/networks
+Create a new network with subnet configuration.
+
+#### GET /api/v0/networks/{id}
+Get network details and DHCP ranges.
+
+#### PATCH /api/v0/networks/{id}
+Update network configuration.
+
+#### DELETE /api/v0/networks/{id}
+Delete a network and its DHCP ranges.
+
+#### POST /api/v0/networks/{id}/dhcp
+Add DHCP IP range to network for automatic allocation.
+
+#### GET /api/v0/networks/{id}/dhcp
+List DHCP ranges for a network.
+
+#### DELETE /api/v0/networks/{id}/dhcp/{rangeId}
+Remove DHCP range from network.
+
+### IP Allocation Features
+
+Nook now supports automatic IP allocation for VMs:
+
+- **Network-Based Allocation**: IPs are automatically assigned from configured DHCP ranges
+- **Conflict Prevention**: System prevents IP conflicts between static and dynamic assignments
+- **Lease Management**: Tracks IP leases with expiration for dynamic allocation
+- **Cloud-Init Integration**: Allocated IPs are automatically included in metadata
+
+**Example: Create machine with auto-IP allocation**
+```bash
+curl -X POST http://localhost:8080/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d '{"name":"web-server","hostname":"web.homelab","network_id":1}'
+```
+
+### Automation Scripts
+
+Two automation scripts are provided for VM provisioning:
+
+#### `provision_vm.sh`
+Complete VM provisioning script that creates a machine, allocates an IP, and adds SSH access.
+
+```bash
+./provision_vm.sh <vm_name> <hostname>
+```
+
+#### `add_ssh_key.sh`
+Adds SSH public key to existing machines for cloud-init integration.
+
+```bash
+./add_ssh_key.sh <machine_id> [ssh_key_path]
+```
+
+See `VM_PROVISIONING_README.md` for detailed usage instructions and examples.
 
 #### GET /
 Basic health check endpoint.

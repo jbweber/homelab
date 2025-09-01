@@ -66,6 +66,47 @@ The API is split into two groups:
 - `/api/v0/networks`
 - `/api/v0/ssh-keys`
 
+## Network Management Features
+
+Nook now includes comprehensive network management for automatic IP allocation:
+
+### Network Configuration
+- **Network Creation**: Define networks with subnet, bridge, and gateway
+- **DHCP Ranges**: Configure IP ranges for automatic allocation
+- **IP Conflict Detection**: Prevents conflicts between static and dynamic IPs
+
+### Automatic IP Allocation
+- **Network-Based**: IPs allocated from appropriate network DHCP ranges
+- **Lease Management**: Tracks IP leases with expiration times
+- **Cloud-Init Ready**: Allocated IPs automatically included in VM metadata
+
+### Example Network Setup
+```bash
+# Create network
+curl -X POST http://localhost:8080/api/v0/networks \
+  -H "Content-Type: application/json" \
+  -d '{"name": "virt-net", "bridge": "virt", "subnet": "10.37.37.0/24", "gateway": "10.37.37.1"}'
+
+# Add DHCP range
+curl -X POST http://localhost:8080/api/v0/networks/1/dhcp \
+  -H "Content-Type: application/json" \
+  -d '{"StartIP": "10.37.37.100", "EndIP": "10.37.37.200", "LeaseTime": "12h"}'
+
+# Create machine with auto-IP
+curl -X POST http://localhost:8080/api/v0/machines \
+  -H "Content-Type: application/json" \
+  -d '{"name": "web-server", "hostname": "web.homelab", "network_id": 1}'
+```
+
+## Automation Scripts
+
+Two scripts are provided for VM provisioning workflow:
+
+- **`provision_vm.sh`**: Complete VM setup with IP allocation and SSH key injection
+- **`add_ssh_key.sh`**: Add SSH keys to existing machines
+
+See `nook/VM_PROVISIONING_README.md` for detailed usage and examples.
+
 ## IP Validation Rules
 
 - Cloud-init endpoints require a valid IP address in the `X-Forwarded-For` header. Requests without a valid IP will be rejected.

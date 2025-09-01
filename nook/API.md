@@ -29,12 +29,71 @@ These endpoints are for managing the data behind the service. They do **not** pe
 - `GET /api/v0/machines/name/{name}` — Get machine by name
 - `GET /api/v0/machines/ipv4/{ipv4}` — Get machine by IPv4
 
+- `GET /api/v0/networks` — List all networks
+- `POST /api/v0/networks` — Create a new network
+- `GET /api/v0/networks/{id}` — Get network by ID
+- `PATCH /api/v0/networks/{id}` — Update network by ID
+- `DELETE /api/v0/networks/{id}` — Delete network by ID
+- `POST /api/v0/networks/{id}/dhcp` — Add DHCP range to network
+- `GET /api/v0/networks/{id}/dhcp` — Get DHCP ranges for network
+- `DELETE /api/v0/networks/{id}/dhcp/{rangeId}` — Delete DHCP range
+
 - `GET /api/v0/ssh-keys` — List all SSH keys
 - `POST /api/v0/ssh-keys` — Create a new SSH key
 - `GET /api/v0/ssh-keys/{id}` — Get SSH key by ID
 - `DELETE /api/v0/ssh-keys/{id}` — Delete SSH key by ID
 
 **Note:** These endpoints are for administrative and automation use, not for cloud-init.
+
+---
+
+## Network Management Endpoints
+These endpoints manage network configurations and IP allocation for automatic VM provisioning.
+
+- `GET /api/v0/networks` — List all networks
+- `POST /api/v0/networks` — Create a new network with subnet and gateway
+- `GET /api/v0/networks/{id}` — Get network details by ID
+- `PATCH /api/v0/networks/{id}` — Update network configuration
+- `DELETE /api/v0/networks/{id}` — Delete network and associated DHCP ranges
+- `POST /api/v0/networks/{id}/dhcp` — Add DHCP IP range to network
+- `GET /api/v0/networks/{id}/dhcp` — Get DHCP ranges for network
+- `DELETE /api/v0/networks/{id}/dhcp/{rangeId}` — Delete DHCP range
+
+**Network Creation Example:**
+```json
+{
+  "name": "virt-net",
+  "bridge": "virt",
+  "subnet": "10.37.37.0/24",
+  "gateway": "10.37.37.1"
+}
+```
+
+**DHCP Range Example:**
+```json
+{
+  "StartIP": "10.37.37.100",
+  "EndIP": "10.37.37.200",
+  "LeaseTime": "12h"
+}
+```
+
+---
+
+## IP Allocation Features
+- **Automatic IP Assignment**: Machines can be created without specifying an IP - the system will automatically allocate from available DHCP ranges
+- **Conflict Detection**: Prevents IP conflicts between static assignments and DHCP leases
+- **Network-Based Allocation**: IPs are allocated from the appropriate network's DHCP ranges
+- **Lease Management**: Tracks IP leases with expiration times for dynamic allocation
+
+**Machine Creation with Auto-IP:**
+```json
+{
+  "name": "web-server",
+  "hostname": "web.homelab",
+  "network_id": 1
+}
+```
 
 ---
 

@@ -22,6 +22,13 @@ This file tracks the current development priorities and future plans for the Noo
 - [x] Complete SSH key endpoint testing
 - [x] Complete cloud-init metadata endpoint testing
 - [x] Add comprehensive error handling and validation
+- [x] Implement network-based IP allocation system
+- [x] Add IP lease management with conflict detection
+- [x] Create VM provisioning automation scripts
+- [x] Integrate SSH key management with cloud-init user-data
+- [x] Add database migrations for network and IP lease tables
+- [x] Test IP allocation on real homelab virt bridge network
+- [x] Create comprehensive VM provisioning documentation
 
 ## Current Status (September 2025)
 - ✅ **Production deployment ready** with systemd user service
@@ -35,6 +42,11 @@ This file tracks the current development priorities and future plans for the Noo
 - ✅ **Error handling** consistent across all endpoints
 - ✅ **Integration testing** with automatic server lifecycle management
 - ✅ **Documentation** updated to reflect current streamlined architecture
+- ✅ **Network-based IP allocation** implemented and tested on homelab
+- ✅ **IP lease management** with conflict detection working
+- ✅ **VM provisioning automation** scripts created and tested
+- ✅ **SSH key integration** with cloud-init user-data verified
+- ✅ **Comprehensive documentation** for VM provisioning workflow
 
 ## Next Steps (Immediate Priority)
 - [ ] Test CLI commands end-to-end
