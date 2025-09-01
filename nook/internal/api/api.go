@@ -441,12 +441,55 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 }
 func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
-	// For now, serve a static cloud-init user-data script
-	fmt.Println("[DEBUG] noCloudUserDataHandler called")
-	userData := `#cloud-config
-hostname: default-host
+	log.Printf("[DEBUG] noCloudUserDataHandler called")
+	ip, err := extractClientIP(r)
+	if err != nil {
+		log.Printf("failed to extract client IP: %v", err)
+		http.Error(w, "unable to determine client IP address", http.StatusBadRequest)
+		return
+	}
+
+	// Validate IP format
+	if net.ParseIP(ip) == nil {
+		log.Printf("invalid IP address format: %s", ip)
+		http.Error(w, "invalid IP address format", http.StatusBadRequest)
+		return
+	}
+
+	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
+	if err != nil {
+		log.Printf("failed to lookup machine by IP %s: %v", ip, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+	if machine.ID == 0 {
+		log.Printf("machine not found for IP: %s", ip)
+		http.Error(w, "machine not found", http.StatusNotFound)
+		return
+	}
+
+	// Get SSH keys
+	keys, err := a.sshKeyRepo.FindByMachineID(context.Background(), machine.ID)
+	if err != nil {
+		log.Printf("failed to list SSH keys for machine %d: %v", machine.ID, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Build user-data
+	userData := fmt.Sprintf(`#cloud-config
+hostname: %s
 manage_etc_hosts: true
-`
+`, machine.Hostname)
+
+	if len(keys) > 0 {
+		userData += "ssh_authorized_keys:\n"
+		for _, key := range keys {
+			userData += fmt.Sprintf("  - %s\n", key.KeyText)
+		}
+	}
+
+	log.Printf("Serving user-data for machine %s (IP: %s), keys count: %d", machine.Name, ip, len(keys))
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(userData)); err != nil {

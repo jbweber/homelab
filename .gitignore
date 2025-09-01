@@ -33,3 +33,6 @@ node_modules/
 *.secret
 *.key
 *.pem
+
+# Test files
+libvirt_test/*

@@ -53,6 +53,8 @@ func (m *MetaData) NoCloudMetaDataHandler(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	log.Printf("Serving meta-data for machine %s (IP: %s)", machine.Name, ip)
+
 	instanceID := fmt.Sprintf("iid-%08d", machine.ID)
 	// Use proper YAML format for NoCloud compatibility
 	meta := fmt.Sprintf(`instance-id: %s

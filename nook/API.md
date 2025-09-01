@@ -14,7 +14,9 @@ These endpoints are compatible with cloud-init and EC2-style metadata services. 
 - `/2021-01-03/meta-data/public-keys` — List of public keys for the requesting machine (IP-based lookup)
 - `/2021-01-03/meta-data/public-keys/{idx}` — Specific public key by index (IP-based lookup)
 - `/2021-01-03/meta-data/public-keys/{idx}/openssh-key` — OpenSSH-formatted key by index (IP-based lookup)
-- `/meta-data`, `/user-data`, `/vendor-data` — Other metadata endpoints (IP-based lookup)
+- `/meta-data` — Instance metadata (YAML with hostname, instance-id, etc.) (IP-based lookup)
+- `/user-data` — Dynamic cloud-config with SSH keys and hostname (IP-based lookup)
+- `/vendor-data` — Vendor-specific data (currently empty) (IP-based lookup)
 
 **Note:** These endpoints always validate the requestor's IP and return 404 if the machine is not found.
 

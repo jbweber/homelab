@@ -57,6 +57,38 @@ make test-race
 make coverage-func
 ```
 
+### Real-World Testing with libvirt
+
+Nook has been successfully tested with real VMs using libvirt and Fedora UKI images. This setup validates the cloud-init integration and metadata delivery.
+
+#### Setup Overview
+- **VM Image**: Fedora Cloud Base UKI (Unified Kernel Image) for UEFI boot
+- **Network**: Bridge interface with dnsmasq for DHCP and DNS
+- **Metadata Source**: Nook running on host at `http://10.37.37.2:8080`
+- **Configuration**: Dynamic user-data with hostname and SSH keys per VM
+
+#### Key Components
+- **Systemd Service**: User service for easy management (`systemctl --user restart nook`)
+- **Dynamic User-Data**: Serves customized cloud-config based on VM IP
+- **Logging**: Detailed request logging for debugging
+- **DHCP**: dnsmasq provides static IPs and gateway/DNS options
+
+#### Testing Steps
+1. Configure dnsmasq on bridge for DHCP with static leases
+2. Add VM to nook database with expected IP
+3. Add SSH keys to VM in nook
+4. Define and start VM with nocloud datasource
+5. VM boots, fetches metadata, sets hostname, installs SSH keys
+
+#### Verified Endpoints
+- `/meta-data`: Instance metadata (YAML)
+- `/user-data`: Cloud-config with SSH keys and hostname
+- `/vendor-data`: Empty (optional)
+
+#### Files
+- `nook/testing/nook.service`: Systemd user service file
+- `.gitignore`: Excludes test files from repo
+
 ### Coverage
 
 Current test coverage: **75.6%** (api package), **62.5%** (datastore package)

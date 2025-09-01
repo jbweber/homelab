@@ -42,6 +42,7 @@ func (s *SSHKeys) PublicKeysHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "machine not found for IP", http.StatusNotFound)
 		return
 	}
+	log.Printf("Serving public-keys for machine %s (IP: %s)", machine.Name, ip)
 	keys, err := s.store.ListSSHKeys(machine.ID)
 	if err != nil {
 		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)

@@ -1,0 +1,10 @@
+[Unit]
+Description=Nook metadata service
+
+[Service]
+ExecStart=/home/jweber/homelab/nook/nook
+WorkingDirectory=/home/jweber/homelab/nook
+Restart=always
+
+[Install]
+WantedBy=default.target
