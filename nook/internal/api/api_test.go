@@ -422,6 +422,38 @@ func TestDeleteMachine_InvalidID(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
+func TestDeleteMachine_Success(t *testing.T) {
+	r := setupTestAPI(t)
+	// Create a machine first
+	reqBody := CreateMachineRequest{
+		Name:     "delete-machine",
+		Hostname: "delete-host",
+		IPv4:     "192.168.1.180",
+	}
+	body, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "192.168.1.180:12345"
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusCreated, w.Code)
+	var created MachineResponse
+	err := json.NewDecoder(w.Body).Decode(&created)
+	require.NoError(t, err)
+
+	// Delete the machine
+	deleteReq := httptest.NewRequest("DELETE", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), nil)
+	deleteW := httptest.NewRecorder()
+	r.ServeHTTP(deleteW, deleteReq)
+	assert.Equal(t, http.StatusNoContent, deleteW.Code)
+
+	// Verify it's gone
+	getReq := httptest.NewRequest("GET", "/api/v0/machines/"+strconv.Itoa(int(created.ID)), nil)
+	getW := httptest.NewRecorder()
+	r.ServeHTTP(getW, getReq)
+	assert.Equal(t, http.StatusNotFound, getW.Code)
+}
+
 func TestGetMachineByName_Valid(t *testing.T) {
 	r := setupTestAPI(t)
 	// Create a machine first
