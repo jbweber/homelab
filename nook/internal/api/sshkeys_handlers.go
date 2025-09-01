@@ -22,6 +22,7 @@ type SSHKeysStore interface {
 	ListAllSSHKeys() ([]SSHKey, error)
 	GetMachineByIPv4(ip string) (*Machine, error)
 	ListSSHKeys(machineID int64) ([]SSHKey, error)
+	CreateSSHKey(machineID int64, keyText string) (*SSHKey, error)
 }
 
 // PublicKeysHandler handles /2021-01-03/meta-data/public-keys
@@ -136,16 +137,18 @@ func NewSSHKeys(store SSHKeysStore) *SSHKeys {
 	return &SSHKeys{store: store}
 }
 
+// SSHKeyResponse represents the JSON response for SSH key operations
+type SSHKeyResponse struct {
+	ID        int64  `json:"id"`
+	MachineID int64  `json:"machine_id"`
+	KeyText   string `json:"key_text"`
+}
+
 func (s *SSHKeys) SSHKeysHandler(w http.ResponseWriter, r *http.Request) {
 	keys, err := s.store.ListAllSSHKeys()
 	if err != nil {
 		http.Error(w, "failed to list SSH keys", http.StatusInternalServerError)
 		return
-	}
-	type SSHKeyResponse struct {
-		ID        int64  `json:"id"`
-		MachineID int64  `json:"machine_id"`
-		KeyText   string `json:"key_text"`
 	}
 	resp := make([]SSHKeyResponse, len(keys))
 	for i, k := range keys {
@@ -168,6 +171,36 @@ func (s *SSHKeys) SSHKeysHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *SSHKeys) CreateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		MachineID int64  `json:"machine_id"`
+		KeyText   string `json:"key_text"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.KeyText == "" {
+		http.Error(w, "key_text is required", http.StatusBadRequest)
+		return
+	}
+	key, err := s.store.CreateSSHKey(req.MachineID, req.KeyText)
+	if err != nil {
+		http.Error(w, "failed to create SSH key", http.StatusInternalServerError)
+		return
+	}
+	resp := SSHKeyResponse{
+		ID:        key.ID,
+		MachineID: key.MachineID,
+		KeyText:   key.KeyText,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("failed to encode create ssh key response: %v", err)
+	}
+}
+
 // RegisterSSHKeysRoutes registers all SSH key related routes on the provided router.
 // This function encapsulates all SSH key route registration logic, making it easier
 // to test and maintain SSH key functionality independently.
@@ -177,6 +210,7 @@ func RegisterSSHKeysRoutes(r chi.Router, store SSHKeysStore) {
 	// API v0 SSH keys endpoints
 	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
 		r.Get("/", sshKeys.SSHKeysHandler)
+		r.Post("/", sshKeys.CreateSSHKeyHandler)
 	})
 
 	// EC2-compatible public keys endpoints

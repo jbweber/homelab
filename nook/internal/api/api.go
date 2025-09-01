@@ -179,6 +179,28 @@ func (a *sshKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error) {
 	return result, nil
 }
 
+func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SSHKey, error) {
+	key, err := a.sshKeyRepo.CreateForMachine(context.Background(), machineID, keyText)
+	if err != nil {
+		return nil, err
+	}
+	// Convert domain.SSHKey to api.SSHKey
+	return &SSHKey{
+		ID:        key.ID,
+		MachineID: key.MachineID,
+		KeyText:   key.KeyText,
+	}, nil
+}
+
+// simpleNetworksStore is a simple implementation of NetworksStore
+type simpleNetworksStore struct{}
+
+func (s *simpleNetworksStore) CreateNetwork(name string) error {
+	// For now, just log the network creation
+	log.Printf("Network created: %s", name)
+	return nil
+}
+
 // metaDataStoreAdapter adapts MachineRepository to MetaDataStore interface
 type metaDataStoreAdapter struct {
 	machineRepo repository.MachineRepository
@@ -389,9 +411,10 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// Networks endpoints group
-	networks := NewNetworks(nil)
+	networks := NewNetworks(&simpleNetworksStore{})
 	r.Route("/api/v0/networks", func(r chi.Router) {
 		r.Get("/", networks.NetworksHandler)
+		r.Post("/", networks.CreateNetworkHandler)
 	})
 
 	// SSH keys endpoints group - registered by the SSH keys module
