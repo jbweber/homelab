@@ -192,12 +192,22 @@ func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SS
 	}, nil
 }
 
+func (a *sshKeysStoreAdapter) DeleteSSHKey(id int64) error {
+	return a.sshKeyRepo.DeleteByID(context.Background(), id)
+}
+
 // simpleNetworksStore is a simple implementation of NetworksStore
 type simpleNetworksStore struct{}
 
 func (s *simpleNetworksStore) CreateNetwork(name string) error {
 	// For now, just log the network creation
 	log.Printf("Network created: %s", name)
+	return nil
+}
+
+func (s *simpleNetworksStore) DeleteNetwork(name string) error {
+	// For now, just log the network deletion
+	log.Printf("Network deleted: %s", name)
 	return nil
 }
 
@@ -415,6 +425,7 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	r.Route("/api/v0/networks", func(r chi.Router) {
 		r.Get("/", networks.NetworksHandler)
 		r.Post("/", networks.CreateNetworkHandler)
+		r.Delete("/{name}", networks.DeleteNetworkHandler)
 	})
 
 	// SSH keys endpoints group - registered by the SSH keys module

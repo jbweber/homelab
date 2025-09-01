@@ -23,6 +23,7 @@ type SSHKeysStore interface {
 	GetMachineByIPv4(ip string) (*Machine, error)
 	ListSSHKeys(machineID int64) ([]SSHKey, error)
 	CreateSSHKey(machineID int64, keyText string) (*SSHKey, error)
+	DeleteSSHKey(id int64) error
 }
 
 // PublicKeysHandler handles /2021-01-03/meta-data/public-keys
@@ -201,6 +202,23 @@ func (s *SSHKeys) CreateSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (s *SSHKeys) DeleteSSHKeyHandler(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid SSH key ID", http.StatusBadRequest)
+		return
+	}
+
+	err = s.store.DeleteSSHKey(id)
+	if err != nil {
+		http.Error(w, "failed to delete SSH key", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // RegisterSSHKeysRoutes registers all SSH key related routes on the provided router.
 // This function encapsulates all SSH key route registration logic, making it easier
 // to test and maintain SSH key functionality independently.
@@ -211,6 +229,7 @@ func RegisterSSHKeysRoutes(r chi.Router, store SSHKeysStore) {
 	r.Route("/api/v0/ssh-keys", func(r chi.Router) {
 		r.Get("/", sshKeys.SSHKeysHandler)
 		r.Post("/", sshKeys.CreateSSHKeyHandler)
+		r.Delete("/{id}", sshKeys.DeleteSSHKeyHandler)
 	})
 
 	// EC2-compatible public keys endpoints

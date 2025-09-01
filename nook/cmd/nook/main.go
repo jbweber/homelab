@@ -34,6 +34,11 @@ func main() {
 		Short: "Add resources to the nook service",
 	}
 
+	var deleteCmd = &cobra.Command{
+		Use:   "delete",
+		Short: "Delete resources from the nook service",
+	}
+
 	var addMachineCmd = &cobra.Command{
 		Use:   "machine",
 		Short: "Add a machine",
@@ -76,10 +81,47 @@ func main() {
 	addSSHKeyCmd.MarkFlagRequired("machine-id")
 	addSSHKeyCmd.MarkFlagRequired("key-text")
 
+	var deleteMachineCmd = &cobra.Command{
+		Use:   "machine",
+		Short: "Delete a machine",
+		Run: func(cmd *cobra.Command, args []string) {
+			id, _ := cmd.Flags().GetInt64("id")
+			deleteMachine(id)
+		},
+	}
+	deleteMachineCmd.Flags().Int64("id", 0, "Machine ID (required)")
+	deleteMachineCmd.MarkFlagRequired("id")
+
+	var deleteNetworkCmd = &cobra.Command{
+		Use:   "network",
+		Short: "Delete a network",
+		Run: func(cmd *cobra.Command, args []string) {
+			name, _ := cmd.Flags().GetString("name")
+			deleteNetwork(name)
+		},
+	}
+	deleteNetworkCmd.Flags().String("name", "", "Network name (required)")
+	deleteNetworkCmd.MarkFlagRequired("name")
+
+	var deleteSSHKeyCmd = &cobra.Command{
+		Use:   "ssh-key",
+		Short: "Delete an SSH key",
+		Run: func(cmd *cobra.Command, args []string) {
+			id, _ := cmd.Flags().GetInt64("id")
+			deleteSSHKey(id)
+		},
+	}
+	deleteSSHKeyCmd.Flags().Int64("id", 0, "SSH key ID (required)")
+	deleteSSHKeyCmd.MarkFlagRequired("id")
+
 	addCmd.AddCommand(addMachineCmd)
 	addCmd.AddCommand(addNetworkCmd)
 	addCmd.AddCommand(addSSHKeyCmd)
+	deleteCmd.AddCommand(deleteMachineCmd)
+	deleteCmd.AddCommand(deleteNetworkCmd)
+	deleteCmd.AddCommand(deleteSSHKeyCmd)
 	rootCmd.AddCommand(addCmd)
+	rootCmd.AddCommand(deleteCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal(err)
@@ -165,6 +207,45 @@ func addSSHKey(machineID int64, keyText string) {
 		log.Fatalf("Failed to add SSH key: %s", resp.Status)
 	}
 	fmt.Println("SSH key added successfully")
+}
+
+func deleteMachine(id int64) {
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("http://localhost:8080/api/v0/machines/%d", id), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatalf("Failed to delete machine: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		log.Fatalf("Failed to delete machine: %s", resp.Status)
+	}
+	fmt.Println("Machine deleted successfully")
+}
+
+func deleteNetwork(name string) {
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("http://localhost:8080/api/v0/networks/%s", name), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatalf("Failed to delete network: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		log.Fatalf("Failed to delete network: %s", resp.Status)
+	}
+	fmt.Println("Network deleted successfully")
+}
+
+func deleteSSHKey(id int64) {
+	req, _ := http.NewRequest("DELETE", fmt.Sprintf("http://localhost:8080/api/v0/ssh-keys/%d", id), nil)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		log.Fatalf("Failed to delete SSH key: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		log.Fatalf("Failed to delete SSH key: %s", resp.Status)
+	}
+	fmt.Println("SSH key deleted successfully")
 }
 
 // initializeDatabase creates a new SQLite database and runs migrations.

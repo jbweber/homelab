@@ -4,12 +4,15 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 // NetworksStore defines the datastore interface for network handlers (placeholder for future expansion)
 type NetworksStore interface {
 	// Add methods as needed for real network data
 	CreateNetwork(name string) error
+	DeleteNetwork(name string) error
 }
 
 // Networks groups network handlers for testability
@@ -52,4 +55,24 @@ func (n *Networks) CreateNetworkHandler(w http.ResponseWriter, r *http.Request) 
 	if _, err := w.Write([]byte(`{"message": "network created"}`)); err != nil {
 		log.Printf("failed to write create network response: %v", err)
 	}
+}
+
+func (n *Networks) DeleteNetworkHandler(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		http.Error(w, "network name is required", http.StatusBadRequest)
+		return
+	}
+
+	if n.store == nil {
+		http.Error(w, "networks store not implemented", http.StatusNotImplemented)
+		return
+	}
+
+	if err := n.store.DeleteNetwork(name); err != nil {
+		http.Error(w, "failed to delete network", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
