@@ -23,9 +23,22 @@ These endpoints are compatible with cloud-init and EC2-style metadata services. 
 ## Management Endpoints
 These endpoints are for managing the data behind the service. They do **not** perform IP validation or machine matching. They operate on all data in the system, regardless of the requestor.
 
-- `/api/v0/machines` — CRUD operations for machines
-- `/api/v0/networks` — Network management
-- `/api/v0/ssh-keys` — List all SSH keys in the system (returns all keys as JSON, no IP filtering)
+- `GET /api/v0/machines` — List all machines
+- `POST /api/v0/machines` — Create a new machine
+- `GET /api/v0/machines/{id}` — Get machine by ID
+- `DELETE /api/v0/machines/{id}` — Delete machine by ID (cascades to SSH keys)
+- `GET /api/v0/machines/name/{name}` — Get machine by name
+- `GET /api/v0/machines/ipv4/{ipv4}` — Get machine by IPv4
+
+- `GET /api/v0/ssh-keys` — List all SSH keys
+- `POST /api/v0/ssh-keys` — Create a new SSH key
+- `GET /api/v0/ssh-keys/{id}` — Get SSH key by ID
+- `DELETE /api/v0/ssh-keys/{id}` — Delete SSH key by ID
+
+- `GET /api/v0/networks` — List all networks
+- `POST /api/v0/networks` — Create a new network
+- `GET /api/v0/networks/{id}` — Get network by ID
+- `DELETE /api/v0/networks/{id}` — Delete network by ID
 
 **Note:** These endpoints are for administrative and automation use, not for cloud-init.
 
@@ -36,7 +49,7 @@ These endpoints are for managing the data behind the service. They do **not** pe
 - Cloud-init endpoints **must** use IP-based machine lookup for correct metadata delivery.
 - Unit tests expect `/api/v0/ssh-keys` to always return a 200 and a JSON array, even if empty.
 - Lint and coverage checks should be run for both endpoint groups.
-- **Coverage Status (August 2025):** 75.6% overall, with SSH key handlers at 95.5%+ coverage. Focus on error branches and edge cases in recent improvements.
+- **Coverage Status (September 2025):** 58.4% overall coverage (temporarily lowered from 75% during active development). All critical paths tested, focus on functionality over metrics. SSH key handlers at 95.5%+ coverage. Recent improvements include comprehensive error handling and cascade deletion testing.
 
 ---
 
