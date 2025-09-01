@@ -2,7 +2,6 @@ package api
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jbweber/homelab/nook/internal/migrations"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,26 +75,19 @@ func TestInstanceIdentityDocumentHandler_MalformedRemoteAddr(t *testing.T) {
 }
 
 func setupTestAPI(t *testing.T) *chi.Mux {
-	// Create test database
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestAPI"))
-	require.NoError(t, err)
+	// Create test database with migrations
+	db, cleanup := testutil.SetupTestDB(t, "TestAPI")
+	t.Cleanup(cleanup)
 
 	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	migrator := migrations.NewMigrator(db)
+	for _, migration := range migrations.GetInitialMigrations() {
+		migrator.AddMigration(migration)
+	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	if err := migrator.RunMigrations(); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
+	}
 
 	// Setup router
 	r := chi.NewRouter()
@@ -251,6 +244,23 @@ func TestNoCloudNetworkConfigHandler(t *testing.T) {
 
 func TestNoCloudMetaDataHandler(t *testing.T) {
 	r := setupTestAPI(t)
+
+	// Create a machine with the IP that will be making the request
+	reqBody := CreateMachineRequest{
+		Name:     "test-machine",
+		Hostname: "test-host",
+		IPv4:     "192.168.1.100",
+	}
+	body, _ := json.Marshal(reqBody)
+
+	createReq := httptest.NewRequest("POST", "/api/v0/machines", bytes.NewReader(body))
+	createReq.Header.Set("Content-Type", "application/json")
+	createReq.RemoteAddr = "192.168.1.100:12345"
+	createW := httptest.NewRecorder()
+	r.ServeHTTP(createW, createReq)
+	require.Equal(t, http.StatusCreated, createW.Code)
+
+	// Now test the metadata handler
 	req := httptest.NewRequest("GET", "/meta-data", nil)
 	req.RemoteAddr = "192.168.1.100:12345"
 	w := httptest.NewRecorder()

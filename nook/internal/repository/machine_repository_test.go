@@ -9,23 +9,30 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jbweber/homelab/nook/internal/domain"
+	"github.com/jbweber/homelab/nook/internal/migrations"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	_ "modernc.org/sqlite"
 )
 
-func TestMachineRepository_Save(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_Save"))
-	require.NoError(t, err)
-	defer db.Close()
+func setupTestDBWithMigrations(t *testing.T, testName string) (*sql.DB, func()) {
+	db, cleanup := testutil.SetupTestDB(t, testName)
 
 	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	migrator := migrations.NewMigrator(db)
+	for _, migration := range migrations.GetInitialMigrations() {
+		migrator.AddMigration(migration)
+	}
+
+	if err := migrator.RunMigrations(); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	return db, cleanup
+}
+
+func TestMachineRepository_Save(t *testing.T) {
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_Save")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()
@@ -46,18 +53,8 @@ func TestMachineRepository_Save(t *testing.T) {
 }
 
 func TestMachineRepository_FindByID(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_FindByID"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_FindByID")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()
@@ -87,18 +84,8 @@ func TestMachineRepository_FindByID(t *testing.T) {
 }
 
 func TestMachineRepository_FindByName(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_FindByName"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_FindByName")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()
@@ -110,7 +97,7 @@ func TestMachineRepository_FindByName(t *testing.T) {
 		IPv4:     "192.168.1.100",
 	}
 
-	_, err = repo.Save(ctx, machine)
+	_, err := repo.Save(ctx, machine)
 	require.NoError(t, err)
 
 	// Find by name
@@ -127,18 +114,8 @@ func TestMachineRepository_FindByName(t *testing.T) {
 }
 
 func TestMachineRepository_FindByIPv4(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_FindByIPv4"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_FindByIPv4")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()
@@ -150,7 +127,7 @@ func TestMachineRepository_FindByIPv4(t *testing.T) {
 		IPv4:     "192.168.1.100",
 	}
 
-	_, err = repo.Save(ctx, machine)
+	_, err := repo.Save(ctx, machine)
 	require.NoError(t, err)
 
 	// Find by IPv4
@@ -167,18 +144,8 @@ func TestMachineRepository_FindByIPv4(t *testing.T) {
 }
 
 func TestMachineRepository_FindAll(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_FindAll"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_FindAll")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()
@@ -195,7 +162,7 @@ func TestMachineRepository_FindAll(t *testing.T) {
 		IPv4:     "192.168.1.101",
 	}
 
-	_, err = repo.Save(ctx, machine1)
+	_, err := repo.Save(ctx, machine1)
 	require.NoError(t, err)
 	_, err = repo.Save(ctx, machine2)
 	require.NoError(t, err)
@@ -215,18 +182,8 @@ func TestMachineRepository_FindAll(t *testing.T) {
 }
 
 func TestMachineRepository_DeleteByID(t *testing.T) {
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestMachineRepository_DeleteByID"))
-	require.NoError(t, err)
-	defer db.Close()
-
-	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	db, cleanup := setupTestDBWithMigrations(t, "TestMachineRepository_DeleteByID")
+	defer cleanup()
 
 	repo := NewMachineRepository(db)
 	ctx := context.Background()

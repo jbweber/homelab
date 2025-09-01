@@ -1,7 +1,8 @@
 {
-  "recommendations": [    
+  "recommendations": [
     "redhat.ansible",
     "golang.go",
-    "ryanluker.vscode-coverage-gutters"
+    "ryanluker.vscode-coverage-gutters",
+    "ms-vscode.makefile"
   ]
 }

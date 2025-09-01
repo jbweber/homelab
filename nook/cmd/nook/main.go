@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jbweber/homelab/nook/internal/api"
+	"github.com/jbweber/homelab/nook/internal/migrations"
 	_ "modernc.org/sqlite"
 )
 
@@ -51,28 +52,33 @@ func initializeDatabase(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := migrateDatabase(db); err != nil {
+
+	// Enable foreign keys
+	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
+	}
+
+	// Run migrations
+	if err := runMigrations(db); err != nil {
 		return nil, err
 	}
+
 	return db, nil
 }
 
-// migrateDatabase creates tables for machines and ssh_keys if they do not exist.
-func migrateDatabase(db *sql.DB) error {
-	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	if err != nil {
-		return err
+// runMigrations runs all database migrations
+func runMigrations(db *sql.DB) error {
+	migrator := migrations.NewMigrator(db)
+
+	// Add all migrations
+	for _, migration := range migrations.GetInitialMigrations() {
+		migrator.AddMigration(migration)
 	}
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY(machine_id) REFERENCES machines(id)
-	);`)
-	return err
+
+	// Run migrations
+	if err := migrator.RunMigrations(); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/jbweber/homelab/nook/internal/domain"
+	"github.com/jbweber/homelab/nook/internal/migrations"
 	"github.com/jbweber/homelab/nook/internal/repository"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	_ "modernc.org/sqlite"
@@ -110,26 +111,19 @@ func (a *testSSHKeysStoreAdapter) ListSSHKeys(machineID int64) ([]SSHKey, error)
 
 // setupSSHKeysTestAPI creates a test router with full API but focused on SSH keys testing
 func setupSSHKeysTestAPI(t *testing.T) (*chi.Mux, *sql.DB) {
-	// Create test database
-	db, err := sql.Open("sqlite", testutil.NewTestDSN("TestSSHKeys"))
-	require.NoError(t, err)
+	// Create test database with migrations
+	db, cleanup := testutil.SetupTestDB(t, "TestSSHKeys")
+	t.Cleanup(cleanup)
 
 	// Run migrations
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS machines (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		hostname TEXT NOT NULL,
-		ipv4 TEXT NOT NULL UNIQUE
-	);`)
-	require.NoError(t, err)
+	migrator := migrations.NewMigrator(db)
+	for _, migration := range migrations.GetInitialMigrations() {
+		migrator.AddMigration(migration)
+	}
 
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS ssh_keys (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		machine_id INTEGER NOT NULL,
-		key_text TEXT NOT NULL,
-		FOREIGN KEY (machine_id) REFERENCES machines(id)
-	);`)
-	require.NoError(t, err)
+	if err := migrator.RunMigrations(); err != nil {
+		t.Fatalf("Failed to run migrations: %v", err)
+	}
 
 	r := chi.NewRouter()
 	api := NewAPI(db)
