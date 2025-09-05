@@ -393,6 +393,17 @@ func NewAPI(db *sql.DB) *API {
 	}
 }
 
+// NewAPIWithRepos creates a new API instance with specific repositories for testing
+func NewAPIWithRepos(machineRepo repository.MachineRepository, sshKeyRepo repository.SSHKeyRepository, networkRepo repository.NetworkRepository, dhcpRangeRepo repository.DHCPRangeRepository, ipLeaseRepo repository.IPLeaseRepository) *API {
+	return &API{
+		machineRepo:   machineRepo,
+		sshKeyRepo:    sshKeyRepo,
+		networkRepo:   networkRepo,
+		dhcpRangeRepo: dhcpRangeRepo,
+		ipLeaseRepo:   ipLeaseRepo,
+	}
+}
+
 // RegisterRoutes registers all API endpoints to the given chi router.
 func (a *API) RegisterRoutes(r chi.Router) {
 

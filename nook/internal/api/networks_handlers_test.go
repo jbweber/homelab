@@ -50,11 +50,12 @@ func TestNetworks_NetworksHandler(t *testing.T) {
 	}
 
 	// Create handler
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request
 	req := httptest.NewRequest("GET", "/api/v0/networks", nil)
@@ -89,11 +90,12 @@ func TestNetworks_CreateNetworkHandler(t *testing.T) {
 	// Create handler
 	networkRepo := repository.NewNetworkRepository(db)
 	dhcpRepo := repository.NewDHCPRangeRepository(db)
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request body
 	requestBody := domain.Network{
@@ -153,11 +155,12 @@ func TestNetworks_GetNetworkHandler(t *testing.T) {
 	}
 
 	// Create handler
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request with URL parameter
 	req := httptest.NewRequest("GET", "/api/v0/networks/"+strconv.FormatInt(savedNetwork.ID, 10), nil)
@@ -207,11 +210,12 @@ func TestNetworks_UpdateNetworkHandler(t *testing.T) {
 	}
 
 	// Create handler
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request body
 	requestBody := domain.Network{
@@ -274,11 +278,12 @@ func TestNetworks_DeleteNetworkHandler(t *testing.T) {
 	}
 
 	// Create handler
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request with URL parameter
 	req := httptest.NewRequest("DELETE", "/api/v0/networks/"+strconv.FormatInt(savedNetwork.ID, 10), nil)
@@ -312,11 +317,12 @@ func TestNetworks_CreateDHCPRangeHandler(t *testing.T) {
 
 	// Create handler
 	dhcpRepo := repository.NewDHCPRangeRepository(db)
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request body
 	requestBody := domain.DHCPRange{
@@ -386,11 +392,12 @@ func TestNetworks_GetNetworkDHCPRangesHandler(t *testing.T) {
 	}
 
 	// Create handler
-	store := &networkStoreAdapter{
-		networkRepo:   networkRepo,
-		dhcpRangeRepo: dhcpRepo,
-	}
-	networks := NewNetworks(store)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+	
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
 
 	// Create request with URL parameter
 	req := httptest.NewRequest("GET", "/api/v0/networks/"+strconv.FormatInt(savedNetwork.ID, 10)+"/dhcp", nil)

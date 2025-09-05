@@ -93,8 +93,8 @@ For an improved workflow, it is recommended to install the **Go Coverage Gutters
 ## Architecture & Design Philosophy
 
 ### Clean Architecture Principles
-- **Repository Pattern**: Clean separation between business logic and data access through generic Repository[T, ID] interfaces
-- **Dependency Injection**: Handlers receive store interfaces, enabling easy testing and mocking
+- **Repository Pattern**: Clean separation between business logic and data access through repository interfaces
+- **Direct API Methods**: The main API struct implements store interfaces directly, eliminating unnecessary adapter layers
 - **Single Responsibility**: Each handler, repository, and service has a focused, well-defined purpose
 - **Error Handling**: Consistent error handling patterns with proper HTTP status codes and JSON responses
 
