@@ -8,7 +8,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 GOFMT=$(GOCMD) fmt
 GOVET=$(GOCMD) vet
-GOIMPORTS=$(HOME)/go/bin/goimports
+GOIMPORTS=go run golang.org/x/tools/cmd/goimports@latest
 
 # Main package path
 MAIN_PACKAGE=./cmd/nook
@@ -111,10 +111,10 @@ vet:
 	$(GOVET) ./...
 
 
-# Lint (uses explicit path for portability)
+# Lint (uses go run for portability)
 .PHONY: lint
 lint:
-	$(HOME)/go/bin/golangci-lint run
+	go run github.com/golangci/golangci-lint/cmd/golangci-lint@latest run
 
 
 # Check formatting (go fmt + goimports)

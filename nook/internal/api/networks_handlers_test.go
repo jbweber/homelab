@@ -53,7 +53,7 @@ func TestNetworks_NetworksHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -93,7 +93,7 @@ func TestNetworks_CreateNetworkHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -158,7 +158,7 @@ func TestNetworks_GetNetworkHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -213,7 +213,7 @@ func TestNetworks_UpdateNetworkHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -281,7 +281,7 @@ func TestNetworks_DeleteNetworkHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -320,7 +320,7 @@ func TestNetworks_CreateDHCPRangeHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 
@@ -395,7 +395,7 @@ func TestNetworks_GetNetworkDHCPRangesHandler(t *testing.T) {
 	machineRepo := repository.NewMachineRepository(db)
 	sshKeyRepo := repository.NewSSHKeyRepository(db)
 	ipLeaseRepo := repository.NewIPLeaseRepository(db)
-	
+
 	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
 	networks := NewNetworks(api)
 

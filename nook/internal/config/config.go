@@ -28,7 +28,7 @@ func NewConfig() *Config {
 // InitializeDatabase creates and configures the database connection
 func (c *Config) InitializeDatabase() (*sql.DB, error) {
 	dbPath := c.expandPath(c.DBPath)
-	
+
 	// Ensure database directory exists
 	dbDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dbDir, 0755); err != nil {
@@ -58,13 +58,13 @@ func (c *Config) expandPath(path string) string {
 	if !strings.HasPrefix(path, "~/") {
 		return path
 	}
-	
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		// Return original path if we can't get home dir
 		return path
 	}
-	
+
 	return filepath.Join(homeDir, path[2:])
 }
 

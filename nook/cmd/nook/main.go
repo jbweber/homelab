@@ -299,4 +299,3 @@ func deleteSSHKey(id int64) {
 	}
 	fmt.Println("SSH key deleted successfully")
 }
-
