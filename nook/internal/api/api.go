@@ -26,14 +26,9 @@ type API struct {
 	ipLeaseRepo   repository.IPLeaseRepository
 }
 
-// machineStoreAdapter adapts MachinesStore interface
-type machineStoreAdapter struct {
-	repo        repository.MachineRepository
-	ipLeaseRepo repository.IPLeaseRepository
-}
-
-func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
-	machines, err := a.repo.FindAll(context.Background())
+// ListMachines implements MachinesStore interface
+func (a *API) ListMachines() ([]Machine, error) {
+	machines, err := a.machineRepo.FindAll(context.Background())
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +46,8 @@ func (a *machineStoreAdapter) ListMachines() ([]Machine, error) {
 	return result, nil
 }
 
-func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
+// CreateMachine implements MachinesStore interface
+func (a *API) CreateMachine(m Machine) (Machine, error) {
 	// Convert api.Machine to domain.Machine
 	domainMachine := domain.Machine{
 		ID:        m.ID,
@@ -60,7 +56,7 @@ func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
 		IPv4:      m.IPv4,
 		NetworkID: m.NetworkID,
 	}
-	saved, err := a.repo.Save(context.Background(), domainMachine)
+	saved, err := a.machineRepo.Save(context.Background(), domainMachine)
 	if err != nil {
 		return Machine{}, err
 	}
@@ -70,14 +66,14 @@ func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
 		lease, err := a.ipLeaseRepo.AllocateIPAddress(context.Background(), saved.ID, *m.NetworkID)
 		if err != nil {
 			// If IP allocation fails, delete the machine and return error
-			if deleteErr := a.repo.DeleteByID(context.Background(), saved.ID); deleteErr != nil {
+			if deleteErr := a.machineRepo.DeleteByID(context.Background(), saved.ID); deleteErr != nil {
 				fmt.Printf("Warning: failed to delete machine after IP allocation failure: %v\n", deleteErr)
 			}
 			return Machine{}, fmt.Errorf("failed to allocate IP address: %w", err)
 		}
 		// Update the machine with the allocated IP
 		saved.IPv4 = lease.IPAddress
-		updated, err := a.repo.Save(context.Background(), saved)
+		updated, err := a.machineRepo.Save(context.Background(), saved)
 		if err != nil {
 			// If update fails, deallocate the IP
 			if deallocErr := a.ipLeaseRepo.DeallocateIPAddress(context.Background(), saved.ID, *m.NetworkID); deallocErr != nil {
@@ -98,8 +94,9 @@ func (a *machineStoreAdapter) CreateMachine(m Machine) (Machine, error) {
 	}, nil
 }
 
-func (a *machineStoreAdapter) GetMachine(id int64) (*Machine, error) {
-	machine, err := a.repo.FindByID(context.Background(), id)
+// GetMachine implements MachinesStore interface
+func (a *API) GetMachine(id int64) (*Machine, error) {
+	machine, err := a.machineRepo.FindByID(context.Background(), id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, nil
@@ -116,9 +113,10 @@ func (a *machineStoreAdapter) GetMachine(id int64) (*Machine, error) {
 	}, nil
 }
 
-func (a *machineStoreAdapter) DeleteMachine(id int64) error {
+// DeleteMachine implements MachinesStore interface
+func (a *API) DeleteMachine(id int64) error {
 	// First, get the machine to check if it has a network-allocated IP
-	machine, err := a.repo.FindByID(context.Background(), id)
+	machine, err := a.machineRepo.FindByID(context.Background(), id)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil // Machine doesn't exist, consider it deleted
@@ -135,11 +133,12 @@ func (a *machineStoreAdapter) DeleteMachine(id int64) error {
 	}
 
 	// Delete the machine
-	return a.repo.DeleteByID(context.Background(), id)
+	return a.machineRepo.DeleteByID(context.Background(), id)
 }
 
-func (a *machineStoreAdapter) GetMachineByName(name string) (*Machine, error) {
-	machine, err := a.repo.FindByName(context.Background(), name)
+// GetMachineByName implements MachinesStore interface
+func (a *API) GetMachineByName(name string) (*Machine, error) {
+	machine, err := a.machineRepo.FindByName(context.Background(), name)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil, nil
@@ -156,25 +155,8 @@ func (a *machineStoreAdapter) GetMachineByName(name string) (*Machine, error) {
 	}, nil
 }
 
-func (a *machineStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
-	machine, err := a.repo.FindByIPv4(context.Background(), ipv4)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	// Convert domain.Machine to api.Machine
-	return &Machine{
-		ID:        machine.ID,
-		Name:      machine.Name,
-		Hostname:  machine.Hostname,
-		IPv4:      machine.IPv4,
-		NetworkID: machine.NetworkID,
-	}, nil
-}
-
-func (a *machineStoreAdapter) AllocateIPAddress(machineID, networkID int64) (string, error) {
+// AllocateIPAddress implements MachinesStore interface
+func (a *API) AllocateIPAddress(machineID, networkID int64) (string, error) {
 	lease, err := a.ipLeaseRepo.AllocateIPAddress(context.Background(), machineID, networkID)
 	if err != nil {
 		return "", err
@@ -182,59 +164,58 @@ func (a *machineStoreAdapter) AllocateIPAddress(machineID, networkID int64) (str
 	return lease.IPAddress, nil
 }
 
-func (a *machineStoreAdapter) DeallocateIPAddress(machineID, networkID int64) error {
+// DeallocateIPAddress implements MachinesStore interface
+func (a *API) DeallocateIPAddress(machineID, networkID int64) error {
 	return a.ipLeaseRepo.DeallocateIPAddress(context.Background(), machineID, networkID)
 }
 
-// networkStoreAdapter adapts NetworkRepository to NetworksStore interface
-type networkStoreAdapter struct {
-	networkRepo   repository.NetworkRepository
-	dhcpRangeRepo repository.DHCPRangeRepository
-}
-
-func (a *networkStoreAdapter) CreateNetwork(network domain.Network) (domain.Network, error) {
+// CreateNetwork implements NetworksStore interface
+func (a *API) CreateNetwork(network domain.Network) (domain.Network, error) {
 	return a.networkRepo.Save(context.Background(), network)
 }
 
-func (a *networkStoreAdapter) GetNetwork(id int64) (domain.Network, error) {
+// GetNetwork implements NetworksStore interface
+func (a *API) GetNetwork(id int64) (domain.Network, error) {
 	return a.networkRepo.FindByID(context.Background(), id)
 }
 
-func (a *networkStoreAdapter) GetNetworkByName(name string) (domain.Network, error) {
+// GetNetworkByName implements NetworksStore interface
+func (a *API) GetNetworkByName(name string) (domain.Network, error) {
 	return a.networkRepo.FindByName(context.Background(), name)
 }
 
-func (a *networkStoreAdapter) ListNetworks() ([]domain.Network, error) {
+// ListNetworks implements NetworksStore interface
+func (a *API) ListNetworks() ([]domain.Network, error) {
 	return a.networkRepo.FindAll(context.Background())
 }
 
-func (a *networkStoreAdapter) UpdateNetwork(network domain.Network) (domain.Network, error) {
+// UpdateNetwork implements NetworksStore interface
+func (a *API) UpdateNetwork(network domain.Network) (domain.Network, error) {
 	return a.networkRepo.Save(context.Background(), network)
 }
 
-func (a *networkStoreAdapter) DeleteNetwork(id int64) error {
+// DeleteNetwork implements NetworksStore interface
+func (a *API) DeleteNetwork(id int64) error {
 	return a.networkRepo.DeleteByID(context.Background(), id)
 }
 
-func (a *networkStoreAdapter) GetDHCPRanges(networkID int64) ([]domain.DHCPRange, error) {
+// GetDHCPRanges implements NetworksStore interface
+func (a *API) GetDHCPRanges(networkID int64) ([]domain.DHCPRange, error) {
 	return a.networkRepo.GetDHCPRanges(context.Background(), networkID)
 }
 
-func (a *networkStoreAdapter) CreateDHCPRange(dhcpRange domain.DHCPRange) (domain.DHCPRange, error) {
+// CreateDHCPRange implements NetworksStore interface
+func (a *API) CreateDHCPRange(dhcpRange domain.DHCPRange) (domain.DHCPRange, error) {
 	return a.dhcpRangeRepo.Save(context.Background(), dhcpRange)
 }
 
-func (a *networkStoreAdapter) DeleteDHCPRange(id int64) error {
+// DeleteDHCPRange implements NetworksStore interface
+func (a *API) DeleteDHCPRange(id int64) error {
 	return a.dhcpRangeRepo.DeleteByID(context.Background(), id)
 }
 
-// sshKeysStoreAdapter adapts repositories to SSHKeysStore interface
-type sshKeysStoreAdapter struct {
-	sshKeyRepo  repository.SSHKeyRepository
-	machineRepo repository.MachineRepository
-}
-
-func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
+// ListAllSSHKeys implements SSHKeysStore interface
+func (a *API) ListAllSSHKeys() ([]SSHKey, error) {
 	keys, err := a.sshKeyRepo.FindAll(context.Background())
 	if err != nil {
 		return nil, err
@@ -251,24 +232,8 @@ func (a *sshKeysStoreAdapter) ListAllSSHKeys() ([]SSHKey, error) {
 	return result, nil
 }
 
-func (a *sshKeysStoreAdapter) GetMachineByIPv4(ip string) (*Machine, error) {
-	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	// Convert domain.Machine to api.Machine
-	return &Machine{
-		ID:       machine.ID,
-		Name:     machine.Name,
-		Hostname: machine.Hostname,
-		IPv4:     machine.IPv4,
-	}, nil
-}
-
-func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SSHKey, error) {
+// CreateSSHKey implements SSHKeysStore interface
+func (a *API) CreateSSHKey(machineID int64, keyText string) (*SSHKey, error) {
 	key, err := a.sshKeyRepo.CreateForMachine(context.Background(), machineID, keyText)
 	if err != nil {
 		return nil, err
@@ -281,16 +246,13 @@ func (a *sshKeysStoreAdapter) CreateSSHKey(machineID int64, keyText string) (*SS
 	}, nil
 }
 
-func (a *sshKeysStoreAdapter) DeleteSSHKey(id int64) error {
+// DeleteSSHKey implements SSHKeysStore interface
+func (a *API) DeleteSSHKey(id int64) error {
 	return a.sshKeyRepo.DeleteByID(context.Background(), id)
 }
 
-// metaDataStoreAdapter adapts MachineRepository to MetaDataStore interface
-type metaDataStoreAdapter struct {
-	machineRepo repository.MachineRepository
-}
-
-func (a *metaDataStoreAdapter) GetMachineByIPv4(ipv4 string) (*Machine, error) {
+// GetMachineByIPv4 implements MetaDataStore interface
+func (a *API) GetMachineByIPv4(ipv4 string) (*Machine, error) {
 	machine, err := a.machineRepo.FindByIPv4(context.Background(), ipv4)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -435,18 +397,13 @@ func NewAPI(db *sql.DB) *API {
 func (a *API) RegisterRoutes(r chi.Router) {
 
 	// Metadata endpoints group
-	metaAdapter := &metaDataStoreAdapter{machineRepo: a.machineRepo}
-	meta := NewMetaData(metaAdapter)
+	meta := NewMetaData(a)
 	r.Get("/meta-data", meta.NoCloudMetaDataHandler)
 	r.Get("/user-data", a.noCloudUserDataHandler)
 	r.Get("/vendor-data", a.noCloudVendorDataHandler)
 
 	// Machines endpoints group
-	machineAdapter := &machineStoreAdapter{
-		repo:        a.machineRepo,
-		ipLeaseRepo: a.ipLeaseRepo,
-	}
-	machines := NewMachines(machineAdapter)
+	machines := NewMachines(a)
 	r.Route("/api/v0/machines", func(r chi.Router) {
 		r.Get("/", machines.ListMachinesHandler)
 		r.Post("/", machines.CreateMachineHandler)
@@ -458,11 +415,7 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// Networks endpoints group
-	networkAdapter := &networkStoreAdapter{
-		networkRepo:   a.networkRepo,
-		dhcpRangeRepo: a.dhcpRangeRepo,
-	}
-	networks := NewNetworks(networkAdapter)
+	networks := NewNetworks(a)
 	r.Route("/api/v0/networks", func(r chi.Router) {
 		r.Get("/", networks.NetworksHandler)
 		r.Post("/", networks.CreateNetworkHandler)
@@ -475,11 +428,7 @@ func (a *API) RegisterRoutes(r chi.Router) {
 	})
 
 	// SSH keys endpoints group - registered by the SSH keys module
-	sshKeysAdapter := &sshKeysStoreAdapter{
-		sshKeyRepo:  a.sshKeyRepo,
-		machineRepo: a.machineRepo,
-	}
-	RegisterSSHKeysRoutes(r, sshKeysAdapter)
+	RegisterSSHKeysRoutes(r, a)
 }
 func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
 	ip, err := extractClientIP(r)
