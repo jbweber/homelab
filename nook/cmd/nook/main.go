@@ -5,21 +5,16 @@ package main
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/jbweber/homelab/nook/internal/api"
-	"github.com/jbweber/homelab/nook/internal/migrations"
+	"github.com/jbweber/homelab/nook/internal/config"
 	"github.com/spf13/cobra"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
@@ -33,9 +28,10 @@ func main() {
 		Use:   "server",
 		Short: "Start the nook web service",
 		Run: func(cmd *cobra.Command, args []string) {
-			dbPath, _ := cmd.Flags().GetString("db-path")
-			port, _ := cmd.Flags().GetString("port")
-			runServer(dbPath, port)
+			cfg := config.NewConfig()
+			cfg.DBPath, _ = cmd.Flags().GetString("db-path")
+			cfg.Port, _ = cmd.Flags().GetString("port")
+			runServer(cfg)
 		},
 	}
 	serverCmd.Flags().String("db-path", "~/nook/data/nook.db", "Path to the database file")
@@ -159,12 +155,13 @@ func main() {
 	}
 }
 
-func runServer(dbPath, port string) {
+func runServer(cfg *config.Config) {
 	// Initialize database
-	db, err := initializeDatabase(dbPath)
+	db, err := cfg.InitializeDatabase()
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
+	defer db.Close()
 
 	// Setup router
 	r := chi.NewRouter()
@@ -182,8 +179,8 @@ func runServer(dbPath, port string) {
 		}
 	})
 
-	fmt.Printf("Starting Nook web service on :%s...\n", port)
-	err = http.ListenAndServe(":"+port, r)
+	fmt.Printf("Starting Nook web service on :%s...\n", cfg.Port)
+	err = http.ListenAndServe(":"+cfg.Port, r)
 	if err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
@@ -303,48 +300,3 @@ func deleteSSHKey(id int64) {
 	fmt.Println("SSH key deleted successfully")
 }
 
-// initializeDatabase creates a new SQLite database and runs migrations.
-func initializeDatabase(path string) (*sql.DB, error) {
-	// Expand ~ to home directory
-	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get home directory: %w", err)
-		}
-		path = filepath.Join(homeDir, path[2:])
-	}
-
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		return nil, err
-	}
-
-	// Enable foreign keys
-	if _, err := db.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
-	}
-
-	// Run migrations
-	if err := runMigrations(db); err != nil {
-		return nil, err
-	}
-
-	return db, nil
-}
-
-// runMigrations runs all database migrations
-func runMigrations(db *sql.DB) error {
-	migrator := migrations.NewMigrator(db)
-
-	// Add all migrations
-	for _, migration := range migrations.GetInitialMigrations() {
-		migrator.AddMigration(migration)
-	}
-
-	// Run migrations
-	if err := migrator.RunMigrations(); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	return nil
-}
