@@ -429,3 +429,251 @@ func TestNetworks_GetNetworkDHCPRangesHandler(t *testing.T) {
 		t.Errorf("Expected start IP %s, got %s", dhcpRange.StartIP, response[0].StartIP)
 	}
 }
+
+func TestNetworks_DeleteDHCPRangeHandler_Success(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_DeleteDHCPRangeHandler_Success")
+	defer cleanup()
+
+	// Create test network and DHCP range
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+
+	network := domain.Network{Name: "test-network", Bridge: "br0", Subnet: "192.168.1.0/24"}
+	savedNetwork, err := networkRepo.Save(context.Background(), network)
+	if err != nil {
+		t.Fatalf("Failed to save network: %v", err)
+	}
+
+	dhcpRange := domain.DHCPRange{
+		NetworkID: savedNetwork.ID,
+		StartIP:   "192.168.1.100",
+		EndIP:     "192.168.1.150",
+		LeaseTime: "24h",
+	}
+
+	savedRange, err := dhcpRepo.Save(context.Background(), dhcpRange)
+	if err != nil {
+		t.Fatalf("Failed to save DHCP range: %v", err)
+	}
+
+	// Create handler
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request
+	req := httptest.NewRequest("DELETE", "/api/v0/networks/dhcp/"+strconv.FormatInt(savedRange.ID, 10), nil)
+	w := httptest.NewRecorder()
+
+	// Set up chi context for URL parameters
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("rangeId", strconv.FormatInt(savedRange.ID, 10))
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Call handler
+	networks.DeleteDHCPRangeHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusNoContent {
+		t.Errorf("Expected status %d, got %d", http.StatusNoContent, w.Code)
+	}
+}
+
+func TestNetworks_DeleteDHCPRangeHandler_MissingID(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_DeleteDHCPRangeHandler_MissingID")
+	defer cleanup()
+
+	// Create handler
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request without rangeId parameter
+	req := httptest.NewRequest("DELETE", "/api/v0/networks/dhcp/", nil)
+	w := httptest.NewRecorder()
+
+	// Set up chi context without rangeId
+	rctx := chi.NewRouteContext()
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Call handler
+	networks.DeleteDHCPRangeHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNetworks_DeleteDHCPRangeHandler_InvalidID(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_DeleteDHCPRangeHandler_InvalidID")
+	defer cleanup()
+
+	// Create handler
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request with invalid rangeId
+	req := httptest.NewRequest("DELETE", "/api/v0/networks/dhcp/invalid", nil)
+	w := httptest.NewRecorder()
+
+	// Set up chi context with invalid rangeId
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("rangeId", "invalid")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Call handler
+	networks.DeleteDHCPRangeHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNetworks_NetworksHandler_EmptyResult(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_NetworksHandler_EmptyResult")
+	defer cleanup()
+
+	// Create handler without any networks
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request
+	req := httptest.NewRequest("GET", "/api/v0/networks", nil)
+	w := httptest.NewRecorder()
+
+	// Call handler
+	networks.NetworksHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "application/json" {
+		t.Errorf("Expected Content-Type 'application/json', got '%s'", contentType)
+	}
+
+	var response []domain.Network
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+
+	if len(response) != 0 {
+		t.Errorf("Expected 0 networks, got %d", len(response))
+	}
+}
+
+func TestNetworks_CreateNetworkHandler_InvalidJSON(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_CreateNetworkHandler_InvalidJSON")
+	defer cleanup()
+
+	// Create handler
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request with invalid JSON
+	req := httptest.NewRequest("POST", "/api/v0/networks", bytes.NewReader([]byte("invalid json")))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	// Call handler
+	networks.CreateNetworkHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNetworks_GetNetworkHandler_InvalidID(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_GetNetworkHandler_InvalidID")
+	defer cleanup()
+
+	// Create handler
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request with invalid ID
+	req := httptest.NewRequest("GET", "/api/v0/networks/invalid", nil)
+	w := httptest.NewRecorder()
+
+	// Set up chi context with invalid ID
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "invalid")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Call handler
+	networks.GetNetworkHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, w.Code)
+	}
+}
+
+func TestNetworks_GetNetworkHandler_NotFound(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestNetworks_GetNetworkHandler_NotFound")
+	defer cleanup()
+
+	// Create handler
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRepo := repository.NewDHCPRangeRepository(db)
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRepo, ipLeaseRepo)
+	networks := NewNetworks(api)
+
+	// Create request with non-existent ID
+	req := httptest.NewRequest("GET", "/api/v0/networks/999", nil)
+	w := httptest.NewRecorder()
+
+	// Set up chi context with non-existent ID
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", "999")
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+
+	// Call handler
+	networks.GetNetworkHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Expected status %d, got %d", http.StatusNotFound, w.Code)
+	}
+}

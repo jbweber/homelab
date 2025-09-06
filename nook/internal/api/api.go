@@ -96,39 +96,37 @@ func (a *API) noCloudUserDataHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	machine, err := a.machineRepo.FindByIPv4(context.Background(), ip)
-	if err != nil {
-		log.Printf("failed to lookup machine by IP %s: %v", ip, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
-	if machine.ID == 0 {
-		log.Printf("machine not found for IP: %s", ip)
-		http.Error(w, "machine not found", http.StatusNotFound)
-		return
-	}
+	var userData string
 
-	// Get SSH keys
-	keys, err := a.sshKeyRepo.FindByMachineID(context.Background(), machine.ID)
-	if err != nil {
-		log.Printf("failed to list SSH keys for machine %d: %v", machine.ID, err)
-		http.Error(w, "internal server error", http.StatusInternalServerError)
-		return
-	}
+	if err != nil || machine.ID == 0 {
+		// Machine not found - provide basic user data without machine-specific config
+		log.Printf("machine not found for IP %s, providing basic user data", ip)
+		userData = `#cloud-config
+manage_etc_hosts: true
+`
+	} else {
+		// Machine found - get SSH keys and build full user data
+		keys, err := a.sshKeyRepo.FindByMachineID(context.Background(), machine.ID)
+		if err != nil {
+			log.Printf("failed to list SSH keys for machine %d: %v", machine.ID, err)
+			http.Error(w, "internal server error", http.StatusInternalServerError)
+			return
+		}
 
-	// Build user-data
-	userData := fmt.Sprintf(`#cloud-config
+		userData = fmt.Sprintf(`#cloud-config
 hostname: %s
 manage_etc_hosts: true
 `, machine.Hostname)
 
-	if len(keys) > 0 {
-		userData += "ssh_authorized_keys:\n"
-		for _, key := range keys {
-			userData += fmt.Sprintf("  - %s\n", key.KeyText)
+		if len(keys) > 0 {
+			userData += "ssh_authorized_keys:\n"
+			for _, key := range keys {
+				userData += fmt.Sprintf("  - %s\n", key.KeyText)
+			}
 		}
 	}
 
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/yaml")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte(userData)); err != nil {
 		log.Printf("failed to write user data: %v", err)
@@ -138,7 +136,7 @@ manage_etc_hosts: true
 // noCloudVendorDataHandler serves NoCloud-compatible vendor-data
 func (a *API) noCloudVendorDataHandler(w http.ResponseWriter, r *http.Request) {
 	// For now, serve empty vendor-data
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/yaml")
 	w.WriteHeader(http.StatusOK)
 	if _, err := w.Write([]byte("")); err != nil {
 		log.Printf("failed to write vendor data: %v", err)

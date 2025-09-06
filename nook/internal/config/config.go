@@ -45,6 +45,13 @@ func (c *Config) InitializeDatabase() (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to enable foreign keys: %w", err)
 	}
 
+	// Apply performance optimizations
+	OptimizeDatabaseConnection(db)
+
+	if err := ApplyPragmaOptimizations(db); err != nil {
+		return nil, fmt.Errorf("failed to apply performance optimizations: %w", err)
+	}
+
 	// Run migrations
 	if err := c.runMigrations(db); err != nil {
 		return nil, fmt.Errorf("failed to run migrations: %w", err)

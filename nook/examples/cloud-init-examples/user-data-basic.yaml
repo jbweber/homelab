@@ -1,0 +1,37 @@
+#cloud-config
+
+# Basic cloud-init configuration example
+# This shows how Nook provides user data to VMs
+
+# System configuration
+hostname: vm01
+manage_etc_hosts: true
+
+# User configuration
+users:
+  - name: admin
+    gecos: Administrator
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    lock_passwd: false
+    # SSH keys are automatically injected by Nook
+    ssh_authorized_keys: []
+
+# Package management
+package_update: true
+package_upgrade: true
+packages:
+  - curl
+  - wget
+  - git
+  - htop
+  - vim
+
+# Services to start
+runcmd:
+  - systemctl enable ssh
+  - systemctl start ssh
+  - echo "VM provisioned by Nook metadata service" > /etc/motd
+
+# Final message
+final_message: "VM setup complete via Nook cloud-init integration"

@@ -2,15 +2,18 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
+	"strings"
 	"testing"
 
-	"strconv"
-
 	"github.com/go-chi/chi/v5"
+	"github.com/jbweber/homelab/nook/internal/domain"
 	"github.com/jbweber/homelab/nook/internal/migrations"
+	"github.com/jbweber/homelab/nook/internal/repository"
 	"github.com/jbweber/homelab/nook/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -690,4 +693,162 @@ func TestUpdateMachineHandler_NotFound(t *testing.T) {
 	patchW := httptest.NewRecorder()
 	r.ServeHTTP(patchW, patchReq)
 	assert.Equal(t, http.StatusNotFound, patchW.Code)
+}
+
+func TestNoCloudNetworkConfigHandler(t *testing.T) {
+	// Create a simple API instance for the handler
+	api := &API{}
+
+	req := httptest.NewRequest("GET", "/network-config", nil)
+	w := httptest.NewRecorder()
+
+	api.noCloudNetworkConfigHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/yaml" {
+		t.Errorf("Expected Content-Type 'text/yaml', got '%s'", contentType)
+	}
+
+	body := w.Body.String()
+	expectedContent := `version: 2
+ethernets:
+  eth0:
+	dhcp4: true
+`
+	if body != expectedContent {
+		t.Errorf("Unexpected network config body:\nexpected:\n%s\ngot:\n%s", expectedContent, body)
+	}
+}
+
+func TestAPI_noCloudUserDataHandler_WithMachineAndSSHKeys(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestAPI_noCloudUserDataHandler_WithMachineAndSSHKeys")
+	defer cleanup()
+
+	// Create repositories
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRangeRepo := repository.NewDHCPRangeRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	// Create test network and machine
+	network := domain.Network{Name: "test-net", Bridge: "br0", Subnet: "192.168.1.0/24"}
+	savedNetwork, _ := networkRepo.Save(context.Background(), network)
+
+	machine := domain.Machine{
+		Name:      "test-machine",
+		Hostname:  "test-machine.local",
+		IPv4:      "192.168.1.100",
+		NetworkID: &savedNetwork.ID,
+	}
+	savedMachine, _ := machineRepo.Save(context.Background(), machine)
+
+	// Create SSH keys for the machine
+	sshKey1, _ := sshKeyRepo.CreateForMachine(context.Background(), savedMachine.ID, "ssh-rsa AAAAB3NzaC1yc2E... key1")
+	sshKey2, _ := sshKeyRepo.CreateForMachine(context.Background(), savedMachine.ID, "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5... key2")
+	_ = sshKey1
+	_ = sshKey2
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRangeRepo, ipLeaseRepo)
+
+	req := httptest.NewRequest("GET", "/user-data", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+
+	api.noCloudUserDataHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/yaml" {
+		t.Errorf("Expected Content-Type 'text/yaml', got '%s'", contentType)
+	}
+
+	body := w.Body.String()
+	// Verify SSH keys are included
+	if !strings.Contains(body, "ssh_authorized_keys:") {
+		t.Error("Expected SSH keys section in user-data")
+	}
+}
+
+func TestAPI_noCloudUserDataHandler_MachineNotFound(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestAPI_noCloudUserDataHandler_MachineNotFound")
+	defer cleanup()
+
+	// Create repositories
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRangeRepo := repository.NewDHCPRangeRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRangeRepo, ipLeaseRepo)
+
+	req := httptest.NewRequest("GET", "/user-data", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100") // Non-existent machine
+	w := httptest.NewRecorder()
+
+	api.noCloudUserDataHandler(w, req)
+
+	// Check response - should still return basic user data
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	body := w.Body.String()
+	// Should contain basic user data without SSH keys
+	if strings.Contains(body, "ssh_authorized_keys:") {
+		t.Error("Did not expect SSH keys section when machine not found")
+	}
+}
+
+func TestAPI_noCloudVendorDataHandler_WithMachine(t *testing.T) {
+	db, cleanup := testutil.SetupTestDBWithMigrations(t, "TestAPI_noCloudVendorDataHandler_WithMachine")
+	defer cleanup()
+
+	// Create repositories
+	machineRepo := repository.NewMachineRepository(db)
+	sshKeyRepo := repository.NewSSHKeyRepository(db)
+	networkRepo := repository.NewNetworkRepository(db)
+	dhcpRangeRepo := repository.NewDHCPRangeRepository(db)
+	ipLeaseRepo := repository.NewIPLeaseRepository(db)
+
+	// Create test network and machine
+	network := domain.Network{Name: "test-net", Bridge: "br0", Subnet: "192.168.1.0/24"}
+	savedNetwork, _ := networkRepo.Save(context.Background(), network)
+
+	machine := domain.Machine{
+		Name:      "test-machine",
+		Hostname:  "test-machine.local",
+		IPv4:      "192.168.1.100",
+		NetworkID: &savedNetwork.ID,
+	}
+	savedMachine, _ := machineRepo.Save(context.Background(), machine)
+	_ = savedMachine
+
+	api := NewAPIWithRepos(machineRepo, sshKeyRepo, networkRepo, dhcpRangeRepo, ipLeaseRepo)
+
+	req := httptest.NewRequest("GET", "/vendor-data", nil)
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	w := httptest.NewRecorder()
+
+	api.noCloudVendorDataHandler(w, req)
+
+	// Check response
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
+	}
+
+	contentType := w.Header().Get("Content-Type")
+	if contentType != "text/yaml" {
+		t.Errorf("Expected Content-Type 'text/yaml', got '%s'", contentType)
+	}
 }

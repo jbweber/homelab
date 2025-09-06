@@ -6,7 +6,7 @@ import (
 
 // GetInitialMigrations returns all initial migrations
 func GetInitialMigrations() []Migration {
-	return []Migration{
+	migrations := []Migration{
 		{
 			Version: 1,
 			Name:    "create_initial_tables",
@@ -176,6 +176,10 @@ func GetInitialMigrations() []Migration {
 			},
 		},
 	}
+
+	// Append performance migrations
+	migrations = append(migrations, GetPerformanceMigrations()...)
+	return migrations
 }
 
 // upgradeExistingTables upgrades existing tables to add new columns if needed

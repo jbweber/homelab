@@ -2,7 +2,7 @@
 
 Nook is a web service for managing metadata for cloud-init running on virtual machines.
 
-This is a CURSED experiment at using AI for software development. This code may work but I would not recommend people who are not me use it for anything important.
+Nook provides NoCloud-compatible metadata services for cloud-init, enabling automated VM provisioning with SSH keys, user data, and network configuration.
 
 ## Project Structure
 
@@ -10,11 +10,16 @@ This is a CURSED experiment at using AI for software development. This code may 
 nook/
 ├── cmd/nook/              # Main application entry point
 ├── internal/
-│   ├── api/              # HTTP API handlers
-│   ├── domain/           # Domain models
-│   ├── repository/       # Data access layer
-│   ├── migrations/       # Database migrations
-│   └── testutil/         # Testing utilities
+│   ├── api/              # HTTP API handlers and NoCloud metadata
+│   ├── config/           # Configuration and database setup
+│   ├── domain/           # Domain models and data structures
+│   ├── repository/       # Data access layer with SQLite backend
+│   ├── migrations/       # Database schema migrations
+│   └── testutil/         # Testing utilities and helpers
+├── examples/             # Usage examples and documentation
+│   ├── api-usage/        # API client examples (Python, Bash)
+│   ├── cloud-init-examples/ # Cloud-init configuration examples
+│   └── testing/          # Integration tests and validation
 ├── testing/
 │   └── nook.service      # Systemd user service file
 ├── go.mod

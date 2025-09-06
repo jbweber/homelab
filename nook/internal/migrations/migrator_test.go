@@ -33,10 +33,10 @@ func TestMigrator_RunMigrations(t *testing.T) {
 	err = migrator.RunMigrations()
 	require.NoError(t, err)
 
-	// Verify current version
+	// Verify current version (should be the highest migration version)
 	version, err := migrator.GetCurrentVersion()
 	require.NoError(t, err)
-	assert.Equal(t, int64(3), version)
+	assert.Equal(t, int64(10), version) // Updated to include performance migration
 
 	// Verify tables exist
 	var count int
